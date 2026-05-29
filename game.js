@@ -57,6 +57,8 @@ const enemySheet = {
   rows: { idle: 0, walk: 1, attack: 2, hurt: 3 },
 };
 
+const SPRITE_BLEED = 0.5;
+
 function loadImage(src) {
   const img = new Image();
   img.src = src;
@@ -1024,7 +1026,11 @@ function drawBar(x, y, w, h, v, max, fill, back = "rgba(0,0,0,.45)") {
 function drawAtlas(img, index, frameW, frameH, x, y, w, h) {
   if (!img.complete || img.naturalWidth <= 0) return false;
   if ((index + 1) * frameW > img.naturalWidth) return false;
-  ctx.drawImage(img, index * frameW, 0, frameW, frameH, x, y, w, h);
+  const sx = index * frameW + SPRITE_BLEED;
+  const sy = SPRITE_BLEED;
+  const sw = frameW - SPRITE_BLEED * 2;
+  const sh = frameH - SPRITE_BLEED * 2;
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   return true;
 }
 
@@ -1122,7 +1128,7 @@ function drawBackground() {
 function drawEntity(e) {
   const boss = e.kind === "boss";
   const sprite = sprites[e.kind] || sprites.shade;
-  const sheet = boss ? null : e.kind === "elite" ? sprites.eliteSheet : sprites.shadeSheet;
+  const sheet = boss ? sprites.bossSheet : e.kind === "elite" ? sprites.eliteSheet : sprites.shadeSheet;
   const size = boss ? 172 : e.kind === "elite" ? 74 : 55;
   const stage = currentStage();
   ctx.save();
@@ -1162,7 +1168,7 @@ function drawEntity(e) {
     ctx.stroke();
     ctx.restore();
   }
-  if (sheet.complete && sheet.naturalWidth > 0) {
+  if (sheet && sheet.complete && sheet.naturalWidth > 0) {
     let action = "idle";
     if (e.hit > 0) action = "hurt";
     else if (e.attackAnim > 0) action = "attack";
@@ -1175,7 +1181,11 @@ function drawEntity(e) {
           : action === "walk"
             ? Math.floor(e.walkAnim) % 6
             : Math.floor(e.pulse * 3) % 6;
-    ctx.drawImage(sheet, frame * enemySheet.frameW, enemySheet.rows[action] * enemySheet.frameH, enemySheet.frameW, enemySheet.frameH, -size / 2, -size * 0.72, size, size);
+    const sx = frame * enemySheet.frameW + SPRITE_BLEED;
+    const sy = enemySheet.rows[action] * enemySheet.frameH + SPRITE_BLEED;
+    const sw = enemySheet.frameW - SPRITE_BLEED * 2;
+    const sh = enemySheet.frameH - SPRITE_BLEED * 2;
+    ctx.drawImage(sheet, sx, sy, sw, sh, -size / 2, -size * 0.72, size, size);
     if (state.stageIndex > 0) {
       ctx.globalCompositeOperation = "source-atop";
       ctx.fillStyle = stage.tint.replace(".16", ".24").replace(".18", ".24").replace(".10", ".18");
@@ -1253,9 +1263,11 @@ function drawPlayerSheetFrame(size, tint = null) {
     return;
   }
   const anim = playerActionFrame();
-  const sx = anim.frame * playerSheet.frameW;
-  const sy = playerSheet.rows[anim.action] * playerSheet.frameH;
-  ctx.drawImage(sheet, sx, sy, playerSheet.frameW, playerSheet.frameH, -size / 2, -size * 0.76, size, size);
+  const sx = anim.frame * playerSheet.frameW + SPRITE_BLEED;
+  const sy = playerSheet.rows[anim.action] * playerSheet.frameH + SPRITE_BLEED;
+  const sw = playerSheet.frameW - SPRITE_BLEED * 2;
+  const sh = playerSheet.frameH - SPRITE_BLEED * 2;
+  ctx.drawImage(sheet, sx, sy, sw, sh, -size / 2, -size * 0.76, size, size);
   if (tint) {
     ctx.globalCompositeOperation = "source-atop";
     ctx.fillStyle = tint;
