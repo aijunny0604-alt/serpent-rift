@@ -59,6 +59,18 @@ const enemySheet = {
 
 const SPRITE_BLEED = 0.5;
 
+function hexAlpha(hex, a) {
+  if (!hex || hex[0] !== "#") return `rgba(255,255,255,${a})`;
+  const v = hex.slice(1);
+  const n = v.length === 3
+    ? parseInt(v[0] + v[0] + v[1] + v[1] + v[2] + v[2], 16)
+    : parseInt(v, 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
 const _tintCanvas = document.createElement("canvas");
 const _tintCtx = _tintCanvas.getContext("2d");
 
@@ -1583,31 +1595,95 @@ function drawHazard(h) {
   if (h.type === "skillAura") {
     const p = 1 - h.life / h.max;
     const a = clamp(h.life / h.max, 0, 1);
-    ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = a * 0.86;
+    const main = h.palette[0] || "#ffd965";
+    const accent = h.palette[1] || "#ffffff";
+    const deep = h.palette[2] || main;
+    const radius = h.radius * (0.55 + p * 0.55);
     ctx.translate(h.x, h.y);
-    ctx.rotate(state.t * (1.6 + h.spin));
-    for (let i = 0; i < h.palette.length; i += 1) {
-      const radius = h.radius * (0.38 + i * 0.18 + p * 0.38);
-      ctx.strokeStyle = h.palette[i];
-      ctx.shadowBlur = 26;
-      ctx.shadowColor = h.palette[i];
-      ctx.lineWidth = Math.max(2, 7 - i);
+    ctx.globalCompositeOperation = "lighter";
+
+    ctx.globalAlpha = a * 0.55;
+    const gOuter = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 1.55);
+    gOuter.addColorStop(0, hexAlpha(accent, 0.9));
+    gOuter.addColorStop(0.25, hexAlpha(main, 0.75));
+    gOuter.addColorStop(0.65, hexAlpha(deep, 0.28));
+    gOuter.addColorStop(1, hexAlpha(main, 0));
+    ctx.fillStyle = gOuter;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radius * 1.55, radius * 1.05, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalAlpha = a * 0.85;
+    const gRing = ctx.createRadialGradient(0, 0, radius * 0.55, 0, 0, radius * 1.08);
+    gRing.addColorStop(0, hexAlpha(main, 0));
+    gRing.addColorStop(0.45, hexAlpha(accent, 0.95));
+    gRing.addColorStop(0.78, hexAlpha(main, 0.55));
+    gRing.addColorStop(1, hexAlpha(main, 0));
+    ctx.fillStyle = gRing;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radius * 1.08, radius * 0.72, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalAlpha = a;
+    const gCore = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.5);
+    gCore.addColorStop(0, "rgba(255,255,255,1)");
+    gCore.addColorStop(0.35, hexAlpha(accent, 0.85));
+    gCore.addColorStop(0.75, hexAlpha(main, 0.35));
+    gCore.addColorStop(1, hexAlpha(main, 0));
+    ctx.fillStyle = gCore;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.save();
+    ctx.rotate(state.t * (1.4 + h.spin));
+    const rayCount = 10;
+    for (let i = 0; i < rayCount; i += 1) {
+      const angle = (Math.PI * 2 * i) / rayCount;
+      const rayLen = radius * (1.05 + Math.sin(state.t * 3.5 + i) * 0.18);
+      ctx.save();
+      ctx.rotate(angle);
+      const rayGrad = ctx.createLinearGradient(radius * 0.25, 0, rayLen, 0);
+      rayGrad.addColorStop(0, hexAlpha(accent, 0.85));
+      rayGrad.addColorStop(0.55, hexAlpha(main, 0.45));
+      rayGrad.addColorStop(1, hexAlpha(main, 0));
+      ctx.fillStyle = rayGrad;
+      ctx.globalAlpha = a * 0.7;
       ctx.beginPath();
-      ctx.arc(0, 0, radius, i * 0.7, Math.PI * 1.45 + i * 0.7 + p * 1.8);
-      ctx.stroke();
+      ctx.moveTo(radius * 0.25, -2);
+      ctx.lineTo(rayLen, -7);
+      ctx.lineTo(rayLen, 7);
+      ctx.lineTo(radius * 0.25, 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
-    for (let i = 0; i < 10; i += 1) {
-      const color = h.palette[i % h.palette.length];
-      const angle = (Math.PI * 2 * i) / 10 - state.t * 2.2;
-      const r = h.radius * (0.36 + p * 0.7 + (i % 3) * 0.08);
-      ctx.fillStyle = color;
-      ctx.shadowColor = color;
+    ctx.restore();
+
+    const sparkCount = 8;
+    for (let i = 0; i < sparkCount; i += 1) {
+      const angle = (Math.PI * 2 * i) / sparkCount - state.t * 2.4;
+      const orbit = radius * (0.92 + Math.sin(state.t * 4.2 + i) * 0.08);
+      const sx = Math.cos(angle) * orbit;
+      const sy = Math.sin(angle) * orbit * 0.68;
+      const sparkColor = h.palette[i % h.palette.length] || accent;
+      const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 12);
+      sg.addColorStop(0, "rgba(255,255,255,1)");
+      sg.addColorStop(0.45, hexAlpha(sparkColor, 0.85));
+      sg.addColorStop(1, hexAlpha(sparkColor, 0));
+      ctx.fillStyle = sg;
+      ctx.globalAlpha = a * 0.95;
       ctx.beginPath();
-      ctx.arc(Math.cos(angle) * r, Math.sin(angle) * r * 0.64, 4 + (i % 2) * 2, 0, Math.PI * 2);
+      ctx.arc(sx, sy, 12, 0, Math.PI * 2);
       ctx.fill();
     }
-    drawProceduralRune(h.radius * 0.86, h.palette, a * 0.36);
+
+    ctx.globalAlpha = a * 0.55;
+    ctx.strokeStyle = hexAlpha(accent, 0.85);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radius * 1.18, radius * 0.32, 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
   if (h.type === "beam") {
     ctx.globalAlpha = clamp(h.life / 0.28, 0, 1);
