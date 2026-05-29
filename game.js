@@ -1187,28 +1187,42 @@ function drawEntity(e) {
     const sh = enemySheet.frameH - SPRITE_BLEED * 2;
     ctx.drawImage(sheet, sx, sy, sw, sh, -size / 2, -size * 0.72, size, size);
     if (state.stageIndex > 0) {
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
       ctx.globalCompositeOperation = "source-atop";
       ctx.fillStyle = stage.tint.replace(".16", ".24").replace(".18", ".24").replace(".10", ".18");
       ctx.fillRect(-size / 2, -size * 0.72, size, size);
-      ctx.globalCompositeOperation = "source-over";
+      ctx.restore();
     }
     if (e.hit > 0) {
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
       ctx.globalCompositeOperation = "source-atop";
       ctx.fillStyle = "rgba(255, 247, 185, .55)";
       ctx.fillRect(-size / 2, -size * 0.72, size, size);
+      ctx.restore();
     }
   } else if (sprite.complete && sprite.naturalWidth > 0) {
     ctx.drawImage(sprite, -size / 2, -size * 0.72, size, size);
     if (state.stageIndex > 0) {
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
       ctx.globalCompositeOperation = "source-atop";
       ctx.fillStyle = stage.tint.replace(".16", ".24").replace(".18", ".24").replace(".10", ".18");
       ctx.fillRect(-size / 2, -size * 0.72, size, size);
-      ctx.globalCompositeOperation = "source-over";
+      ctx.restore();
     }
     if (e.hit > 0) {
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
       ctx.globalCompositeOperation = "source-atop";
       ctx.fillStyle = "rgba(255, 247, 185, .55)";
       ctx.fillRect(-size / 2, -size * 0.72, size, size);
+      ctx.restore();
     }
   } else {
     ctx.fillStyle = boss ? "#173d28" : e.kind === "elite" ? "#52305e" : "#332a22";
@@ -1227,10 +1241,13 @@ function drawSpriteCutout(sprite, size, tint = null) {
   if (sprite.complete && sprite.naturalWidth > 0) {
     ctx.drawImage(sprite, -size / 2, -size * 0.76, size, size);
     if (tint) {
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
       ctx.globalCompositeOperation = "source-atop";
       ctx.fillStyle = tint;
       ctx.fillRect(-size / 2, -size * 0.76, size, size);
-      ctx.globalCompositeOperation = "source-over";
+      ctx.restore();
     }
   } else {
     ctx.fillStyle = "#1d2d59";
@@ -1269,10 +1286,13 @@ function drawPlayerSheetFrame(size, tint = null) {
   const sh = playerSheet.frameH - SPRITE_BLEED * 2;
   ctx.drawImage(sheet, sx, sy, sw, sh, -size / 2, -size * 0.76, size, size);
   if (tint) {
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
     ctx.globalCompositeOperation = "source-atop";
     ctx.fillStyle = tint;
     ctx.fillRect(-size / 2, -size * 0.76, size, size);
-    ctx.globalCompositeOperation = "source-over";
+    ctx.restore();
   }
 }
 
