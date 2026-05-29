@@ -2604,9 +2604,13 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
-  if (state.screen === "title") state.t += dt;
-  else if (!state.paused) update(dt);
-  draw();
+  try {
+    if (state.screen === "title") state.t += dt;
+    else if (!state.paused) update(dt);
+    draw();
+  } catch (err) {
+    console.error("[game loop] frame skipped:", err);
+  }
   requestAnimationFrame(loop);
 }
 
