@@ -771,12 +771,19 @@ function castSkill(index) {
 
 function update(dt) {
   state.t += dt;
+  if (!Number.isFinite(state.hitStop)) state.hitStop = 0;
+  if (state.hitStop > 0.25) state.hitStop = 0.25;
   if (state.hitStop > 0) {
     state.hitStop = Math.max(0, state.hitStop - dt);
     state.powerFlash = Math.max(0, state.powerFlash - dt * 1.8);
     state.shockwave = Math.max(0, state.shockwave - dt * 2.4);
     return;
   }
+  if (particles.length > 600) particles.splice(0, particles.length - 600);
+  if (hazards.length > 80) hazards.splice(0, hazards.length - 80);
+  if (hits.length > 200) hits.splice(0, hits.length - 200);
+  if (lootDrops.length > 120) lootDrops.splice(0, lootDrops.length - 120);
+  if (projectiles.length > 80) projectiles.splice(0, projectiles.length - 80);
   state.messageTime = Math.max(0, state.messageTime - dt);
   state.stageIntro = Math.max(0, state.stageIntro - dt);
   state.comboTime = Math.max(0, state.comboTime - dt);
