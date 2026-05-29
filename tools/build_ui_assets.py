@@ -181,12 +181,41 @@ def build_loot_icons():
     img.save(ASSETS / "loot-icons.png")
 
 
+def build_element_fx():
+    size = 256
+    img = Image.new("RGBA", (size * 2, size), (0, 0, 0, 0))
+    # Lightning tile
+    tile = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tile, "RGBA")
+    for offset, alpha, width in [(0, 255, 9), (8, 130, 17), (-8, 90, 23)]:
+        pts = [(126 + offset, 6), (96, 76), (132, 72), (90, 154), (132, 142), (108, 250)]
+        d.line(pts, fill=(115, 240, 255, alpha), width=width, joint="curve")
+    d.line([(126, 6), (96, 76), (132, 72), (90, 154), (132, 142), (108, 250)], fill=(255, 255, 255, 255), width=4)
+    tile = tile.filter(ImageFilter.GaussianBlur(0.2))
+    img.alpha_composite(tile, (0, 0))
+
+    # Fire pillar tile
+    tile = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tile, "RGBA")
+    for i in range(9):
+        x = 60 + i * 16 + math.sin(i) * 10
+        h = 130 + (i % 3) * 34
+        color = (255, 70 + i * 14, 18, 155)
+        d.polygon([(x, 236), (x - 28, 112), (x, 236 - h), (x + 30, 112)], fill=color)
+    d.polygon([(128, 240), (70, 118), (130, 20), (186, 118)], fill=(255, 210, 80, 220))
+    d.polygon([(132, 234), (98, 130), (135, 62), (166, 130)], fill=(255, 255, 210, 230))
+    tile = tile.filter(ImageFilter.GaussianBlur(0.5))
+    img.alpha_composite(tile, (size, 0))
+    img.save(ASSETS / "element-fx.png")
+
+
 def main():
     build_skill_icons()
     build_item_icons()
     build_ui_panel()
     build_rune_effects()
     build_loot_icons()
+    build_element_fx()
     print("built ui assets")
 
 

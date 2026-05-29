@@ -28,9 +28,13 @@ const sprites = {
   uiPanel: loadImage("./assets/ui-panel.png"),
   runeEffects: loadImage("./assets/rune-effects.png"),
   lootIcons: loadImage("./assets/loot-icons.png"),
+  elementFx: loadImage("./assets/element-fx.png"),
   shade: loadImage("./assets/shade.png"),
+  shadeSheet: loadImage("./assets/shade-action-sheet.png"),
   elite: loadImage("./assets/elite.png"),
+  eliteSheet: loadImage("./assets/elite-action-sheet.png"),
   boss: loadImage("./assets/boss.png"),
+  bossSheet: loadImage("./assets/boss-action-sheet.png"),
 };
 
 const playerSheet = {
@@ -46,6 +50,13 @@ const playerSheet = {
   },
 };
 
+const enemySheet = {
+  frameW: 128,
+  frameH: 128,
+  cols: 6,
+  rows: { idle: 0, walk: 1, attack: 2, hurt: 3 },
+};
+
 function loadImage(src) {
   const img = new Image();
   img.src = src;
@@ -54,6 +65,7 @@ function loadImage(src) {
 
 const state = {
   t: 0,
+  screen: "title",
   paused: false,
   shake: 0,
   score: 0,
@@ -152,6 +164,8 @@ skills.push(
   { id: "storm", name: "Storm", icon: "Z", cd: 0, maxCd: 5.8, cost: 22, color: "#8dfffb" },
   { id: "meteor", name: "Meteor", icon: "M", cd: 0, maxCd: 7.8, cost: 30, color: "#ff8b3d" },
   { id: "blink", name: "Phantom", icon: "X", cd: 0, maxCd: 4.2, cost: 24, color: "#ffffff" },
+  { id: "thunder", name: "Thunderfall", icon: "T", cd: 0, maxCd: 6.2, cost: 28, color: "#73f5ff" },
+  { id: "inferno", name: "Inferno", icon: "F", cd: 0, maxCd: 7.2, cost: 32, color: "#ff5a2e" },
 );
 
 const skillPalettes = {
@@ -161,6 +175,8 @@ const skillPalettes = {
   storm: ["#8dfffb", "#6fff7b", "#ffffff", "#37a5ff"],
   meteor: ["#ff8b3d", "#ffd35a", "#ff3d4f", "#ffffff"],
   blink: ["#ffffff", "#8dfffb", "#ffd965", "#d66bff"],
+  thunder: ["#ffffff", "#73f5ff", "#297dff", "#fff26e"],
+  inferno: ["#ff5a2e", "#ffd45a", "#ffffff", "#a70028"],
   ultimate: ["#ffffff", "#ffd965", "#57dfff", "#d66bff", "#ff3d4f"],
 };
 
@@ -343,6 +359,8 @@ function spawnEnemy(kind = "shade") {
     attackAnim: 0,
     knockX: 0,
     knockY: 0,
+    walkAnim: rand(0, 10),
+    moving: false,
     pulse: rand(0, 9),
   });
 }
@@ -365,6 +383,8 @@ function spawnBoss() {
     attackAnim: 0,
     knockX: 0,
     knockY: 0,
+    walkAnim: 0,
+    moving: false,
     pulse: 0,
     pattern: 2,
   });
@@ -662,6 +682,30 @@ function castSkill(index) {
       state.comboTime = 1;
     }
   }
+  if (s.id === "thunder") {
+    player.attackAnim = 0.5;
+    player.castAnim = 0.52;
+    spawnSkillAura(W / 2, H * 0.45, "thunder", 190, 0.95);
+    hazards.push({ type: "thunderStorm", life: 1.15, max: 1.15, tick: 0, color: s.color, strikes: [] });
+    for (let i = 0; i < 9; i += 1) {
+      const x = rand(64, W - 64);
+      const y = rand(150, H - 220);
+      hazards.push({ type: "lightningStrike", x, y, life: 0.42 + i * 0.035, max: 0.42 + i * 0.035, color: s.color, delay: i * 0.045 });
+    }
+    state.powerFlash = Math.max(state.powerFlash, 0.42);
+    state.shake = Math.max(state.shake, 16);
+  }
+  if (s.id === "inferno") {
+    player.attackAnim = 0.5;
+    player.castAnim = 0.55;
+    spawnSkillAura(W / 2, H * 0.48, "inferno", 210, 1.1);
+    hazards.push({ type: "infernoField", x: W / 2, y: H * 0.5, life: 1.45, max: 1.45, tick: 0, color: s.color });
+    for (let i = 0; i < 7; i += 1) {
+      hazards.push({ type: "flamePillar", x: rand(58, W - 58), y: rand(190, H - 180), life: 0.9 + i * 0.04, max: 0.9 + i * 0.04, color: s.color, delay: i * 0.06, scale: rand(0.75, 1.2) });
+    }
+    state.powerFlash = Math.max(state.powerFlash, 0.35);
+    state.shake = Math.max(state.shake, 18);
+  }
 }
 
 function update(dt) {
@@ -762,8 +806,12 @@ function update(dt) {
     const ddx = player.x - e.x;
     const ddy = player.y - e.y;
     const d = Math.hypot(ddx, ddy) || 1;
+    const beforeX = e.x;
+    const beforeY = e.y;
     e.x += (ddx / d) * e.speed * dt + e.knockX * dt;
     e.y += (ddy / d) * e.speed * dt + e.knockY * dt;
+    e.moving = Math.hypot(e.x - beforeX, e.y - beforeY) > 0.25;
+    if (e.moving) e.walkAnim += dt * (e.kind === "boss" ? 5.5 : 10);
     e.knockX *= Math.pow(0.035, dt);
     e.knockY *= Math.pow(0.035, dt);
     if (d < e.r + player.r + 4 && player.invuln <= 0) {
@@ -843,6 +891,20 @@ function update(dt) {
         }
         h.index += 1;
         h.timer = 0.085;
+      }
+    }
+    if (h.type === "thunderStorm") {
+      h.tick -= dt;
+      if (h.tick <= 0) {
+        h.tick = 0.16;
+        for (const e of enemies) damageEnemy(e, player.atk * 1.1 + rand(8, 18), h.color, e.x, e.y - 220);
+      }
+    }
+    if (h.type === "infernoField") {
+      h.tick -= dt;
+      if (h.tick <= 0) {
+        h.tick = 0.2;
+        for (const e of enemies) damageEnemy(e, player.atk * 1.25 + rand(10, 24), h.color, h.x, h.y);
       }
     }
     if (h.type === "danger") {
@@ -966,6 +1028,59 @@ function drawAtlas(img, index, frameW, frameH, x, y, w, h) {
   return true;
 }
 
+function drawProceduralRune(radius, palette, alpha = 1) {
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = alpha;
+  for (let i = 0; i < 3; i += 1) {
+    ctx.strokeStyle = palette[i % palette.length];
+    ctx.lineWidth = 2 + i;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = palette[i % palette.length];
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * (0.42 + i * 0.22), i * 0.8 + state.t, Math.PI * 1.55 + i * 0.8 + state.t * 0.4);
+    ctx.stroke();
+  }
+  for (let i = 0; i < 12; i += 1) {
+    const a = (Math.PI * 2 * i) / 12 + state.t * 0.7;
+    const inner = radius * 0.38;
+    const outer = radius * 0.78;
+    ctx.strokeStyle = palette[(i + 1) % palette.length];
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner * 0.72);
+    ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer * 0.72);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function effectPalette(type, fallback = "#ffffff") {
+  if (type === "beam" || type === "lance") return skillPalettes.lance;
+  if (type === "rift") return skillPalettes.rift;
+  if (type === "storm") return skillPalettes.storm;
+  if (type === "meteorMark" || type === "flamePillar" || type === "infernoField") return skillPalettes.inferno;
+  if (type === "ultimate") return skillPalettes.ultimate;
+  if (type === "lightningStrike" || type === "thunderStorm") return skillPalettes.thunder;
+  if (type === "blinkLine") return skillPalettes.blink;
+  return [fallback, "#ffffff", "#ffd965", "#57dfff"];
+}
+
+function strokeMultiArc(cx, cy, radius, start, end, palette, width, alpha = 1) {
+  palette.forEach((color, i) => {
+    ctx.save();
+    ctx.globalAlpha = alpha * (1 - i * 0.13);
+    ctx.strokeStyle = color;
+    ctx.shadowBlur = 18 + i * 4;
+    ctx.shadowColor = color;
+    ctx.lineWidth = Math.max(1, width - i * 2);
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + i * 6, start + i * 0.08, end + i * 0.08);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
 function roundRect(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -979,6 +1094,9 @@ function roundRect(x, y, w, h, r) {
 function drawBackground() {
   const stage = currentStage();
   const img = stage.image;
+  const blur = Math.min(4, state.powerFlash * 3 + state.shockwave * 1.6 + (player.attackAnim > 0 ? 0.8 : 0));
+  ctx.save();
+  if (blur > 0.08) ctx.filter = `blur(${blur}px) saturate(${1 + blur * 0.08})`;
   if (img.complete) {
     const scale = Math.max(W / img.width, H / img.height);
     const bw = img.width * scale;
@@ -988,6 +1106,7 @@ function drawBackground() {
     ctx.fillStyle = "#0c1e16";
     ctx.fillRect(0, 0, W, H);
   }
+  ctx.restore();
   ctx.fillStyle = stage.tint;
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
@@ -1003,6 +1122,7 @@ function drawBackground() {
 function drawEntity(e) {
   const boss = e.kind === "boss";
   const sprite = sprites[e.kind] || sprites.shade;
+  const sheet = boss ? null : e.kind === "elite" ? sprites.eliteSheet : sprites.shadeSheet;
   const size = boss ? 172 : e.kind === "elite" ? 74 : 55;
   const stage = currentStage();
   ctx.save();
@@ -1022,7 +1142,52 @@ function drawEntity(e) {
   ctx.beginPath();
   ctx.ellipse(0, size * 0.27, size * 0.34, size * 0.13, 0, 0, Math.PI * 2);
   ctx.fill();
-  if (sprite.complete && sprite.naturalWidth > 0) {
+  if (e.attackAnim > 0) {
+    const phase = 1 - e.attackAnim / 0.34;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = Math.sin(phase * Math.PI) * 0.8;
+    ctx.rotate(-0.2);
+    ctx.strokeStyle = boss ? stage.enemyColor : "#ff7184";
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.lineWidth = boss ? 9 : 5;
+    ctx.beginPath();
+    ctx.arc(18, -4, boss ? 76 : 34, -0.75, 0.55);
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = boss ? 3 : 2;
+    ctx.beginPath();
+    ctx.arc(18, -4, boss ? 76 : 34, -0.55, 0.38);
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (sheet.complete && sheet.naturalWidth > 0) {
+    let action = "idle";
+    if (e.hit > 0) action = "hurt";
+    else if (e.attackAnim > 0) action = "attack";
+    else if (e.moving) action = "walk";
+    const frame =
+      action === "hurt"
+        ? Math.min(5, Math.floor((1 - e.hit / 0.42) * 6))
+        : action === "attack"
+          ? Math.min(5, Math.floor((1 - e.attackAnim / 0.34) * 6))
+          : action === "walk"
+            ? Math.floor(e.walkAnim) % 6
+            : Math.floor(e.pulse * 3) % 6;
+    ctx.drawImage(sheet, frame * enemySheet.frameW, enemySheet.rows[action] * enemySheet.frameH, enemySheet.frameW, enemySheet.frameH, -size / 2, -size * 0.72, size, size);
+    if (state.stageIndex > 0) {
+      ctx.globalCompositeOperation = "source-atop";
+      ctx.fillStyle = stage.tint.replace(".16", ".24").replace(".18", ".24").replace(".10", ".18");
+      ctx.fillRect(-size / 2, -size * 0.72, size, size);
+      ctx.globalCompositeOperation = "source-over";
+    }
+    if (e.hit > 0) {
+      ctx.globalCompositeOperation = "source-atop";
+      ctx.fillStyle = "rgba(255, 247, 185, .55)";
+      ctx.fillRect(-size / 2, -size * 0.72, size, size);
+    }
+  } else if (sprite.complete && sprite.naturalWidth > 0) {
     ctx.drawImage(sprite, -size / 2, -size * 0.72, size, size);
     if (state.stageIndex > 0) {
       ctx.globalCompositeOperation = "source-atop";
@@ -1110,6 +1275,14 @@ function drawSwordSwing(phase) {
   ctx.save();
   ctx.rotate(baseRotation);
   ctx.globalCompositeOperation = "lighter";
+  ctx.save();
+  ctx.filter = "blur(9px)";
+  ctx.globalAlpha = alpha * 0.34;
+  ctx.fillStyle = "rgba(103, 231, 255, .58)";
+  ctx.beginPath();
+  ctx.ellipse(28, 8, 148, 64, bladeAngle * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
   const coreGradient = ctx.createRadialGradient(20, 4, 4, 20, 4, 132);
   coreGradient.addColorStop(0, `rgba(255, 255, 255, ${1.0 * alpha})`);
@@ -1363,15 +1536,11 @@ function drawHazard(h) {
     ctx.beginPath();
     ctx.arc(h.x, h.y, h.maxR * 0.55 * (1 - h.life / 0.42), 0, Math.PI * 2);
     ctx.stroke();
-    if (sprites.runeEffects.complete) {
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = clamp(h.life / 0.42, 0, 1) * 0.52;
-      ctx.translate(h.x, h.y);
-      ctx.rotate(state.t * 2);
-      ctx.drawImage(sprites.runeEffects, 0, 0, 256, 256, -92, -92, 184, 184);
-      ctx.restore();
-    }
+    ctx.save();
+    ctx.translate(h.x, h.y);
+    ctx.rotate(state.t * 2);
+    drawProceduralRune(92, [h.color, "#ffffff", "#ffd965"], clamp(h.life / 0.42, 0, 1) * 0.52);
+    ctx.restore();
   }
   if (h.type === "skillAura") {
     const p = 1 - h.life / h.max;
@@ -1400,52 +1569,55 @@ function drawHazard(h) {
       ctx.arc(Math.cos(angle) * r, Math.sin(angle) * r * 0.64, 4 + (i % 2) * 2, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (sprites.runeEffects.complete) {
-      ctx.globalAlpha = a * 0.38;
-      const tile = h.palette.length > 4 ? 0 : Math.min(2, h.palette.length - 2);
-      ctx.drawImage(sprites.runeEffects, tile * 256, 0, 256, 256, -h.radius, -h.radius, h.radius * 2, h.radius * 2);
-    }
+    drawProceduralRune(h.radius * 0.86, h.palette, a * 0.36);
   }
   if (h.type === "beam") {
     ctx.globalAlpha = clamp(h.life / 0.28, 0, 1);
-    ctx.strokeStyle = h.color;
-    ctx.lineWidth = 18;
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = h.color;
-    ctx.beginPath();
-    ctx.moveTo(h.x, h.y);
-    ctx.lineTo(h.x + Math.cos(h.angle) * 460, h.y + Math.sin(h.angle) * 460);
-    ctx.stroke();
+    ctx.globalCompositeOperation = "lighter";
+    const palette = effectPalette("beam", h.color);
+    const ex = h.x + Math.cos(h.angle) * 460;
+    const ey = h.y + Math.sin(h.angle) * 460;
+    palette.forEach((color, i) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 22 - i * 4;
+      ctx.shadowBlur = 28;
+      ctx.shadowColor = color;
+      ctx.beginPath();
+      ctx.moveTo(h.x + Math.sin(h.angle) * i * 3, h.y - Math.cos(h.angle) * i * 3);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    });
   }
   if (h.type === "rift") {
     ctx.globalAlpha = clamp(h.life, 0, 1) * 0.7;
-    ctx.fillStyle = "rgba(169, 68, 255, .16)";
-    ctx.strokeStyle = h.color;
-    ctx.lineWidth = 3;
+    const palette = effectPalette("rift", h.color);
+    const g = ctx.createRadialGradient(h.x, h.y, 4, h.x, h.y, h.maxR);
+    g.addColorStop(0, "rgba(255,255,255,.38)");
+    g.addColorStop(0.35, "rgba(255,125,242,.24)");
+    g.addColorStop(0.7, "rgba(115,56,255,.18)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(h.x, h.y, h.maxR, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
-    if (sprites.runeEffects.complete) {
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = clamp(h.life, 0, 1) * 0.58;
-      ctx.translate(h.x, h.y);
-      ctx.rotate(-state.t * 2.4);
-      ctx.drawImage(sprites.runeEffects, 512, 0, 256, 256, -h.maxR, -h.maxR, h.maxR * 2, h.maxR * 2);
-      ctx.restore();
-    }
+    strokeMultiArc(h.x, h.y, h.maxR * 0.72, state.t * 1.8, Math.PI * 1.65 + state.t * 1.8, palette, 7, 0.85);
+    ctx.save();
+    ctx.translate(h.x, h.y);
+    ctx.rotate(-state.t * 2.4);
+    drawProceduralRune(h.maxR, [h.color, "#ffffff", "#7338ff"], clamp(h.life, 0, 1) * 0.58);
+    ctx.restore();
   }
   if (h.type === "storm") {
     const p = 1 - h.life / h.max;
+    const palette = effectPalette("storm", h.color);
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.85;
     ctx.translate(h.x, h.y);
     ctx.rotate(state.t * 3.4);
-    ctx.strokeStyle = h.color;
     ctx.shadowBlur = 32;
-    ctx.shadowColor = h.color;
     for (let i = 0; i < 5; i += 1) {
+      ctx.strokeStyle = palette[i % palette.length];
+      ctx.shadowColor = palette[i % palette.length];
       ctx.lineWidth = 5 - i * 0.45;
       ctx.beginPath();
       ctx.arc(0, 0, 48 + i * 18 + p * 28, i * 1.2, i * 1.2 + Math.PI * 0.9);
@@ -1453,51 +1625,50 @@ function drawHazard(h) {
     }
     for (let i = 0; i < 7; i += 1) {
       const a = (Math.PI * 2 * i) / 7 + state.t * 5;
-      ctx.strokeStyle = i % 2 ? "#ffffff" : h.color;
+      ctx.strokeStyle = palette[i % palette.length];
+      ctx.shadowColor = palette[(i + 1) % palette.length];
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(Math.cos(a) * 18, Math.sin(a) * 18);
       ctx.lineTo(Math.cos(a + 0.2) * 118, Math.sin(a + 0.2) * 118);
       ctx.stroke();
     }
-    if (sprites.runeEffects.complete) {
-      ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.45;
-      ctx.rotate(-state.t * 4.1);
-      ctx.drawImage(sprites.runeEffects, 256, 0, 256, 256, -110, -110, 220, 220);
-    }
+    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.45;
+    ctx.rotate(-state.t * 4.1);
+    drawProceduralRune(110, palette, 0.62);
   }
   if (h.type === "meteorMark") {
     const p = 1 - h.life / h.max;
+    const palette = effectPalette("meteorMark", h.color);
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = clamp(h.life / h.max, 0, 1);
-    ctx.strokeStyle = h.color;
     ctx.shadowBlur = 28;
-    ctx.shadowColor = h.color;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(h.x, h.y, 28 + p * 88, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(h.x, h.y, 70 - p * 46, 0, Math.PI * 2);
-    ctx.stroke();
+    strokeMultiArc(h.x, h.y, 28 + p * 88, 0, Math.PI * 2, palette, 8, 0.95);
+    strokeMultiArc(h.x, h.y, 70 - p * 46, 0, Math.PI * 2, palette.slice().reverse(), 4, 0.75);
   }
   if (h.type === "ultimate") {
     const p = 1 - h.life / h.max;
+    const palette = effectPalette("ultimate", h.color);
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = clamp(h.life / h.max, 0, 1);
     ctx.translate(h.x, h.y);
     ctx.rotate(state.t * 1.8);
-    ctx.strokeStyle = "#ffffff";
     ctx.shadowBlur = 54;
-    ctx.shadowColor = "#8dfffb";
     for (let i = 0; i < 4; i += 1) {
+      ctx.strokeStyle = palette[i % palette.length];
+      ctx.shadowColor = palette[(i + 1) % palette.length];
       ctx.lineWidth = 8 - i;
       ctx.beginPath();
       ctx.arc(0, 0, 70 + i * 34 + p * 55, i * 0.8, Math.PI * 2 - i * 0.45);
       ctx.stroke();
     }
-    ctx.fillStyle = `rgba(141,255,251,${0.18 + p * 0.15})`;
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 150 + p * 80);
+    g.addColorStop(0, `rgba(255,255,255,${0.35 + p * 0.2})`);
+    g.addColorStop(0.32, `rgba(255,217,101,${0.26})`);
+    g.addColorStop(0.56, `rgba(87,223,255,${0.22})`);
+    g.addColorStop(0.8, `rgba(214,107,255,${0.2})`);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(0, 0, 46 + p * 90, 0, Math.PI * 2);
     ctx.fill();
@@ -1571,6 +1742,13 @@ function drawHazard(h) {
     ctx.translate(h.x, h.y);
     ctx.rotate(h.angle);
     ctx.globalAlpha = a;
+    ctx.save();
+    ctx.filter = "blur(8px)";
+    ctx.fillStyle = h.color;
+    ctx.beginPath();
+    ctx.ellipse(45, 0, h.crit ? 96 : 62, h.crit ? 34 : 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
     ctx.shadowBlur = h.crit ? 42 : 28;
     ctx.shadowColor = h.color;
 
@@ -1608,12 +1786,14 @@ function drawHazard(h) {
     ctx.rotate(angle);
     ctx.globalAlpha = a;
     ctx.shadowBlur = 36;
-    ctx.shadowColor = "#ffffff";
+    const palette = effectPalette("blinkLine", h.color);
+    ctx.shadowColor = palette[1];
     const g = ctx.createLinearGradient(0, 0, len, 0);
     g.addColorStop(0, "rgba(255,255,255,0)");
-    g.addColorStop(0.18, "rgba(141,255,251,.95)");
-    g.addColorStop(0.5, "rgba(255,255,255,1)");
-    g.addColorStop(0.82, "rgba(255,217,101,.85)");
+    g.addColorStop(0.18, palette[1]);
+    g.addColorStop(0.45, palette[0]);
+    g.addColorStop(0.68, palette[2]);
+    g.addColorStop(0.9, palette[3]);
     g.addColorStop(1, "rgba(255,255,255,0)");
     ctx.strokeStyle = g;
     ctx.lineWidth = 13 * a + 3;
@@ -1622,7 +1802,7 @@ function drawHazard(h) {
     ctx.moveTo(len * p * 0.15, 0);
     ctx.lineTo(len, 0);
     ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,.88)";
+    ctx.strokeStyle = palette[3];
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(len * 0.12, -10 * a);
@@ -1633,6 +1813,101 @@ function drawHazard(h) {
     ctx.lineTo(len * 0.88, -10 * a);
     ctx.stroke();
   }
+  if (h.type === "lightningStrike") {
+    const activeLife = h.life - (h.delay || 0);
+    if (activeLife > 0) {
+      const a = clamp(activeLife / h.max, 0, 1);
+      const palette = effectPalette("lightningStrike", h.color);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = a;
+      ctx.shadowBlur = 34;
+      ctx.shadowColor = palette[1];
+      if (sprites.elementFx.complete) {
+        ctx.drawImage(sprites.elementFx, 0, 0, 256, 256, h.x - 42, h.y - 220, 84, 240);
+      }
+      palette.forEach((color, i) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 9 - i * 2;
+        ctx.shadowColor = color;
+        ctx.beginPath();
+        ctx.moveTo(h.x + i * 2, 70);
+        ctx.lineTo(h.x + rand(-18, 18), h.y - 80);
+        ctx.lineTo(h.x + rand(-26, 26), h.y);
+        ctx.stroke();
+      });
+      ctx.strokeStyle = palette[2];
+      ctx.lineWidth = 10;
+      ctx.globalAlpha = a * 0.42;
+      ctx.beginPath();
+      ctx.arc(h.x, h.y, 28 + (1 - a) * 46, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  if (h.type === "thunderStorm") {
+    const p = 1 - h.life / h.max;
+    const palette = effectPalette("thunderStorm", h.color);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.45;
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "rgba(115,245,255,.12)");
+    bg.addColorStop(0.5, "rgba(41,125,255,.10)");
+    bg.addColorStop(1, "rgba(255,242,110,.08)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 6; i += 1) {
+      const x = ((state.t * 190 + i * 83) % (W + 120)) - 60;
+      ctx.strokeStyle = palette[i % palette.length];
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + Math.sin(state.t * 6 + i) * 42, H);
+      ctx.stroke();
+    }
+  }
+  if (h.type === "flamePillar") {
+    const activeLife = h.life - (h.delay || 0);
+    if (activeLife > 0) {
+      const a = clamp(activeLife / h.max, 0, 1);
+      const palette = effectPalette("flamePillar", h.color);
+      const scale = h.scale || 1;
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = a;
+      ctx.shadowBlur = 38;
+      ctx.shadowColor = palette[0];
+      if (sprites.elementFx.complete) {
+        ctx.drawImage(sprites.elementFx, 256, 0, 256, 256, h.x - 62 * scale, h.y - 140 * scale, 124 * scale, 170 * scale);
+      }
+      const g = ctx.createRadialGradient(h.x, h.y, 8, h.x, h.y, 88 * scale);
+      g.addColorStop(0, `rgba(255,255,220,${a * 0.7})`);
+      g.addColorStop(0.38, `rgba(255,92,36,${a * 0.52})`);
+      g.addColorStop(0.68, `rgba(255,211,90,${a * 0.28})`);
+      g.addColorStop(1, "rgba(255,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(h.x - 110, h.y - 110, 220, 220);
+    }
+  }
+  if (h.type === "infernoField") {
+    const p = 1 - h.life / h.max;
+    const palette = effectPalette("infernoField", h.color);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.48;
+    const bg = ctx.createRadialGradient(h.x, h.y, 10, h.x, h.y, 360);
+    bg.addColorStop(0, "rgba(255,255,255,.18)");
+    bg.addColorStop(0.3, "rgba(255,90,46,.22)");
+    bg.addColorStop(0.58, "rgba(255,212,90,.12)");
+    bg.addColorStop(1, "rgba(167,0,40,0)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.shadowBlur = 34;
+    palette.forEach((color, i) => {
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.lineWidth = 10 - i * 2;
+      ctx.beginPath();
+      ctx.ellipse(h.x, h.y, 120 + p * 210 + i * 14, 38 + p * 92 + i * 8, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+  }
   ctx.restore();
 }
 
@@ -1642,6 +1917,17 @@ function drawProjectile(p) {
   ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
   ctx.shadowBlur = 24;
   ctx.shadowColor = p.color;
+  if (p.type === "lance" || p.type === "comet" || p.type === "orb") {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.filter = "blur(7px)";
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha *= 0.34;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, p.type === "comet" ? 58 : 38, p.type === "comet" ? 18 : 14, p.angle || 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   if (p.type === "lance") {
     ctx.rotate(p.angle);
     const trail = 90 * (p.life / p.max);
@@ -2083,7 +2369,144 @@ function drawUi() {
   ctx.restore();
 }
 
+function startGame() {
+  if (state.screen !== "title") return;
+  state.screen = "play";
+  state.message = "ENTER THE RIFT";
+  state.messageTime = 1.8;
+  state.stageIntro = 2.2;
+  state.powerFlash = 0.42;
+  state.shockwave = 0.72;
+  state.shake = 18;
+}
+
+function drawTitleScreen() {
+  const t = state.t;
+  const stage = stages[3] || currentStage();
+  const img = stage.image.complete ? stage.image : bg;
+  ctx.save();
+  if (img.complete && img.naturalWidth > 0) {
+    const scale = Math.max(W / img.width, H / img.height);
+    const bw = img.width * scale;
+    const bh = img.height * scale;
+    ctx.filter = "blur(2px) saturate(1.35) contrast(1.08)";
+    ctx.drawImage(img, (W - bw) / 2, (H - bh) / 2, bw, bh);
+    ctx.filter = "none";
+  } else {
+    ctx.fillStyle = "#071019";
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  const vignette = ctx.createRadialGradient(W * 0.5, H * 0.36, 40, W * 0.5, H * 0.52, H * 0.72);
+  vignette.addColorStop(0, "rgba(38, 255, 210, .08)");
+  vignette.addColorStop(0.48, "rgba(6, 10, 22, .22)");
+  vignette.addColorStop(1, "rgba(0, 0, 0, .86)");
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 7; i += 1) {
+    const p = (t * 0.18 + i / 7) % 1;
+    const x = W * (0.1 + i * 0.14);
+    const y = H * (0.18 + p * 0.62);
+    const hue = [185, 275, 45, 330][i % 4];
+    ctx.strokeStyle = `hsla(${hue}, 100%, 68%, ${0.16 - p * 0.09})`;
+    ctx.shadowBlur = 22;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.lineWidth = 2 + i % 3;
+    ctx.beginPath();
+    ctx.moveTo(x - 28, y - 80);
+    ctx.bezierCurveTo(x + 32, y - 24, x - 42, y + 36, x + 22, y + 92);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = "source-over";
+
+  ctx.save();
+  ctx.translate(W * 0.68, H * 0.36 + Math.sin(t * 1.6) * 6);
+  ctx.rotate(-0.08 + Math.sin(t * 1.1) * 0.035);
+  ctx.globalAlpha = 0.52;
+  ctx.shadowBlur = 54;
+  ctx.shadowColor = "#a45cff";
+  if (sprites.boss.complete && sprites.boss.naturalWidth > 0) {
+    ctx.drawImage(sprites.boss, -128, -154, 256, 256);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(W * 0.28, H * 0.64 + Math.sin(t * 2.1) * 4);
+  ctx.rotate(-0.24);
+  ctx.shadowBlur = 34;
+  ctx.shadowColor = "#57dfff";
+  drawPlayerSheetFrame(150, null);
+  ctx.globalCompositeOperation = "lighter";
+  strokeMultiArc(22, -38, 92, -0.86, 0.54, ["#ffffff", "#57dfff", "#ffd965", "#ff4eea"], 12, 0.72);
+  ctx.globalCompositeOperation = "source-over";
+  ctx.restore();
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.shadowBlur = 26;
+  ctx.shadowColor = "#57dfff";
+  ctx.font = "900 54px Segoe UI";
+  const titleGrad = ctx.createLinearGradient(52, 150, W - 52, 226);
+  titleGrad.addColorStop(0, "#ffffff");
+  titleGrad.addColorStop(0.32, "#57dfff");
+  titleGrad.addColorStop(0.62, "#ffd965");
+  titleGrad.addColorStop(1, "#ff4eea");
+  ctx.fillStyle = titleGrad;
+  ctx.fillText("SERPENT RIFT", W / 2, 184);
+  ctx.shadowBlur = 0;
+  ctx.font = "800 13px Segoe UI";
+  ctx.fillStyle = "rgba(235, 252, 255, .82)";
+  ctx.fillText("PHANTOM SLASH ACTION RPG", W / 2, 208);
+
+  const pulse = 0.72 + Math.sin(t * 4) * 0.16;
+  ctx.globalCompositeOperation = "lighter";
+  const buttonGlow = ctx.createRadialGradient(W / 2, H * 0.79, 10, W / 2, H * 0.79, 134);
+  buttonGlow.addColorStop(0, `rgba(87, 223, 255, ${0.26 + pulse * 0.16})`);
+  buttonGlow.addColorStop(0.55, "rgba(255, 217, 101, .10)");
+  buttonGlow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = buttonGlow;
+  ctx.fillRect(0, H * 0.66, W, H * 0.28);
+  ctx.globalCompositeOperation = "source-over";
+
+  ctx.fillStyle = "rgba(2, 8, 16, .62)";
+  roundRect(W / 2 - 112, H * 0.75, 224, 54, 16);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(255, 255, 255, ${0.42 + pulse * 0.24})`;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = "#ffd965";
+  ctx.font = "900 18px Segoe UI";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("TAP TO START", W / 2, H * 0.75 + 34);
+  ctx.shadowBlur = 0;
+
+  const labels = ["AUTO SKILLS", "LOOT DROP", "BOSS RAID", "MULTI STAGE"];
+  labels.forEach((label, i) => {
+    const x = W / 2 - 156 + i * 104;
+    const y = H * 0.87;
+    ctx.fillStyle = "rgba(255, 255, 255, .08)";
+    roundRect(x - 44, y - 16, 88, 30, 9);
+    ctx.fill();
+    ctx.strokeStyle = ["#57dfff", "#ffd965", "#ff4eea", "#8eff65"][i];
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255, 255, 255, .84)";
+    ctx.font = "800 10px Segoe UI";
+    ctx.fillText(label, x, y + 4);
+  });
+  ctx.restore();
+  ctx.restore();
+}
+
 function draw() {
+  if (state.screen === "title") {
+    drawTitleScreen();
+    return;
+  }
   ctx.save();
   const shakeBoost = state.hitStop > 0 ? 1.45 : 1;
   const sx = rand(-state.shake, state.shake) * shakeBoost;
@@ -2169,7 +2592,8 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
-  if (!state.paused) update(dt);
+  if (state.screen === "title") state.t += dt;
+  else if (!state.paused) update(dt);
   draw();
   requestAnimationFrame(loop);
 }
@@ -2207,6 +2631,10 @@ function resetJoystick() {
 
 function handlePointer(ev) {
   ev.preventDefault();
+  if (state.screen === "title") {
+    startGame();
+    return;
+  }
   ensureAudio();
   const p = canvasPoint(ev);
   if (state.panel) {
@@ -2256,6 +2684,10 @@ function handlePointer(ev) {
 canvas.addEventListener("pointerdown", (ev) => {
   input.down = true;
   const p = canvasPoint(ev);
+  if (state.screen === "title") {
+    handlePointer(ev);
+    return;
+  }
   const leftStickZone = p.x < 170 && p.y > H - 285;
   if (leftStickZone) {
     input.joyActive = true;
@@ -2276,6 +2708,10 @@ window.addEventListener("pointerup", () => {
   resetJoystick();
 });
 window.addEventListener("keydown", (ev) => {
+  if (state.screen === "title") {
+    if (ev.key === "Enter" || ev.key === " ") startGame();
+    return;
+  }
   ensureAudio();
   if (ev.key === "1") castSkill(0);
   if (ev.key === "2") castSkill(1);
@@ -2283,6 +2719,8 @@ window.addEventListener("keydown", (ev) => {
   if (ev.key === "4") castSkill(3);
   if (ev.key === "5") castSkill(4);
   if (ev.key === "6") castSkill(5);
+  if (ev.key === "7") castSkill(6);
+  if (ev.key === "8") castSkill(7);
   if (ev.key.toLowerCase() === "q") castUltimate();
   input.keys.add(ev.key.toLowerCase());
 });
