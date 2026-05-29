@@ -59,6 +59,53 @@ const enemySheet = {
 
 const SPRITE_BLEED = 0.5;
 
+const _tintCanvas = document.createElement("canvas");
+const _tintCtx = _tintCanvas.getContext("2d");
+
+function drawSheetFrameTinted(sheet, sx, sy, sw, sh, dx, dy, dw, dh, tints) {
+  const ow = Math.max(8, Math.ceil(sw));
+  const oh = Math.max(8, Math.ceil(sh));
+  if (_tintCanvas.width !== ow) _tintCanvas.width = ow;
+  if (_tintCanvas.height !== oh) _tintCanvas.height = oh;
+  _tintCtx.globalCompositeOperation = "source-over";
+  _tintCtx.clearRect(0, 0, ow, oh);
+  _tintCtx.drawImage(sheet, sx, sy, sw, sh, 0, 0, ow, oh);
+  if (tints && tints.length) {
+    _tintCtx.globalCompositeOperation = "source-atop";
+    for (const t of tints) {
+      if (!t) continue;
+      _tintCtx.fillStyle = t;
+      _tintCtx.fillRect(0, 0, ow, oh);
+    }
+    _tintCtx.globalCompositeOperation = "source-over";
+  }
+  ctx.drawImage(_tintCanvas, dx, dy, dw, dh);
+}
+
+function drawSpriteTinted(sprite, dx, dy, dw, dh, tints) {
+  if (!sprite.complete || sprite.naturalWidth <= 0) return false;
+  const sw = sprite.naturalWidth;
+  const sh = sprite.naturalHeight;
+  const ow = Math.max(8, Math.ceil(sw));
+  const oh = Math.max(8, Math.ceil(sh));
+  if (_tintCanvas.width !== ow) _tintCanvas.width = ow;
+  if (_tintCanvas.height !== oh) _tintCanvas.height = oh;
+  _tintCtx.globalCompositeOperation = "source-over";
+  _tintCtx.clearRect(0, 0, ow, oh);
+  _tintCtx.drawImage(sprite, 0, 0, ow, oh);
+  if (tints && tints.length) {
+    _tintCtx.globalCompositeOperation = "source-atop";
+    for (const t of tints) {
+      if (!t) continue;
+      _tintCtx.fillStyle = t;
+      _tintCtx.fillRect(0, 0, ow, oh);
+    }
+    _tintCtx.globalCompositeOperation = "source-over";
+  }
+  ctx.drawImage(_tintCanvas, dx, dy, dw, dh);
+  return true;
+}
+
 function loadImage(src) {
   const img = new Image();
   img.src = src;
@@ -1168,6 +1215,11 @@ function drawEntity(e) {
     ctx.stroke();
     ctx.restore();
   }
+  const stageTint = state.stageIndex > 0
+    ? stage.tint.replace(".16", ".24").replace(".18", ".24").replace(".10", ".18")
+    : null;
+  const hitTint = e.hit > 0 ? "rgba(255, 247, 185, .55)" : null;
+  const tints = [stageTint, hitTint].filter(Boolean);
   if (sheet && sheet.complete && sheet.naturalWidth > 0) {
     let action = "idle";
     if (e.hit > 0) action = "hurt";
@@ -1185,45 +1237,9 @@ function drawEntity(e) {
     const sy = enemySheet.rows[action] * enemySheet.frameH + SPRITE_BLEED;
     const sw = enemySheet.frameW - SPRITE_BLEED * 2;
     const sh = enemySheet.frameH - SPRITE_BLEED * 2;
-    ctx.drawImage(sheet, sx, sy, sw, sh, -size / 2, -size * 0.72, size, size);
-    if (state.stageIndex > 0) {
-      ctx.save();
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "transparent";
-      ctx.globalCompositeOperation = "source-atop";
-      ctx.fillStyle = stage.tint.replace(".16", ".24").replace(".18", ".24").replace(".10", ".18");
-      ctx.fillRect(-size / 2, -size * 0.72, size, size);
-      ctx.restore();
-    }
-    if (e.hit > 0) {
-      ctx.save();
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "transparent";
-      ctx.globalCompositeOperation = "source-atop";
-      ctx.fillStyle = "rgba(255, 247, 185, .55)";
-      ctx.fillRect(-size / 2, -size * 0.72, size, size);
-      ctx.restore();
-    }
+    drawSheetFrameTinted(sheet, sx, sy, sw, sh, -size / 2, -size * 0.72, size, size, tints);
   } else if (sprite.complete && sprite.naturalWidth > 0) {
-    ctx.drawImage(sprite, -size / 2, -size * 0.72, size, size);
-    if (state.stageIndex > 0) {
-      ctx.save();
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "transparent";
-      ctx.globalCompositeOperation = "source-atop";
-      ctx.fillStyle = stage.tint.replace(".16", ".24").replace(".18", ".24").replace(".10", ".18");
-      ctx.fillRect(-size / 2, -size * 0.72, size, size);
-      ctx.restore();
-    }
-    if (e.hit > 0) {
-      ctx.save();
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "transparent";
-      ctx.globalCompositeOperation = "source-atop";
-      ctx.fillStyle = "rgba(255, 247, 185, .55)";
-      ctx.fillRect(-size / 2, -size * 0.72, size, size);
-      ctx.restore();
-    }
+    drawSpriteTinted(sprite, -size / 2, -size * 0.72, size, size, tints);
   } else {
     ctx.fillStyle = boss ? "#173d28" : e.kind === "elite" ? "#52305e" : "#332a22";
     ctx.strokeStyle = e.hit > 0 ? "#fff6b0" : boss ? "#9aff70" : "#ffd76b";
@@ -1239,15 +1255,10 @@ function drawEntity(e) {
 
 function drawSpriteCutout(sprite, size, tint = null) {
   if (sprite.complete && sprite.naturalWidth > 0) {
-    ctx.drawImage(sprite, -size / 2, -size * 0.76, size, size);
     if (tint) {
-      ctx.save();
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "transparent";
-      ctx.globalCompositeOperation = "source-atop";
-      ctx.fillStyle = tint;
-      ctx.fillRect(-size / 2, -size * 0.76, size, size);
-      ctx.restore();
+      drawSpriteTinted(sprite, -size / 2, -size * 0.76, size, size, [tint]);
+    } else {
+      ctx.drawImage(sprite, -size / 2, -size * 0.76, size, size);
     }
   } else {
     ctx.fillStyle = "#1d2d59";
@@ -1284,15 +1295,10 @@ function drawPlayerSheetFrame(size, tint = null) {
   const sy = playerSheet.rows[anim.action] * playerSheet.frameH + SPRITE_BLEED;
   const sw = playerSheet.frameW - SPRITE_BLEED * 2;
   const sh = playerSheet.frameH - SPRITE_BLEED * 2;
-  ctx.drawImage(sheet, sx, sy, sw, sh, -size / 2, -size * 0.76, size, size);
   if (tint) {
-    ctx.save();
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
-    ctx.globalCompositeOperation = "source-atop";
-    ctx.fillStyle = tint;
-    ctx.fillRect(-size / 2, -size * 0.76, size, size);
-    ctx.restore();
+    drawSheetFrameTinted(sheet, sx, sy, sw, sh, -size / 2, -size * 0.76, size, size, [tint]);
+  } else {
+    ctx.drawImage(sheet, sx, sy, sw, sh, -size / 2, -size * 0.76, size, size);
   }
 }
 
