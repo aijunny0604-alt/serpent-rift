@@ -35,6 +35,7 @@ def paste_center(sheet: Image.Image, sprite: Image.Image, col: int, row: int, xo
     x = col * FRAME_W + (FRAME_W - sprite.width) // 2 + int(xoff)
     y = row * FRAME_H + FRAME_H - sprite.height - 8 + int(yoff)
     sheet.alpha_composite(sprite, (x, y))
+    return x, y
 
 
 def transform(base: Image.Image, scale_x=1.0, scale_y=1.0, rotate=0, brightness=1.0) -> Image.Image:
@@ -48,6 +49,50 @@ def transform(base: Image.Image, scale_x=1.0, scale_y=1.0, rotate=0, brightness=
     return img
 
 
+def walk_deform(sprite: Image.Image, phase: float) -> Image.Image:
+    out = Image.new("RGBA", sprite.size, (0, 0, 0, 0))
+    for y in range(sprite.height):
+        lower = max(0, (y - sprite.height * 0.48) / (sprite.height * 0.52))
+        sway = math.sin(phase) * (lower ** 1.5) * 5
+        bob = -abs(math.sin(phase)) * lower * 3
+        row = sprite.crop((0, y, sprite.width, y + 1))
+        out.alpha_composite(row, (int(sway), int(y + bob)))
+    return out
+
+
+def apply_walk_pose(sprite: Image.Image, phase: float) -> Image.Image:
+    w, h = sprite.size
+    body = sprite.copy()
+    leg_y = int(h * 0.56)
+    leg_h = h - leg_y
+    stride = int(math.sin(phase) * 9)
+    lift_front = int(max(0, math.cos(phase)) * 6)
+    lift_back = int(max(0, -math.cos(phase)) * 6)
+    parts = [
+        {
+            "box": (int(w * 0.18), leg_y, int(w * 0.53), h),
+            "dx": stride,
+            "dy": -lift_front,
+        },
+        {
+            "box": (int(w * 0.42), leg_y, int(w * 0.78), h),
+            "dx": -stride,
+            "dy": -lift_back,
+        },
+    ]
+    for part in parts:
+        x1, y1, x2, y2 = part["box"]
+        patch = sprite.crop((x1, y1, x2, y2))
+        clear = Image.new("RGBA", patch.size, (0, 0, 0, 0))
+        body.paste(clear, (x1, y1), patch.getchannel("A"))
+        body.alpha_composite(patch, (x1 + part["dx"], y1 + part["dy"]))
+
+    # A tiny shoulder sway makes the walk readable without drawing helper bones.
+    out = Image.new("RGBA", (w + 12, h + 6), (0, 0, 0, 0))
+    out.alpha_composite(body, (6 + int(math.sin(phase) * 2), int(abs(math.sin(phase)) * -2)))
+    return out
+
+
 def draw_attack_fx(sheet: Image.Image, col: int, row: int, power: float):
     draw = ImageDraw.Draw(sheet, "RGBA")
     ox = col * FRAME_W
@@ -58,50 +103,6 @@ def draw_attack_fx(sheet: Image.Image, col: int, row: int, power: float):
     alpha = int(210 * power)
     draw.arc(box, 210, 345, fill=(255, 244, 155, alpha), width=12)
     draw.arc([box[0] + 8, box[1] + 8, box[2] - 6, box[3] - 6], 218, 338, fill=(255, 255, 255, alpha), width=4)
-
-
-def draw_attack_arm(sheet: Image.Image, col: int, row: int, phase: float):
-    draw = ImageDraw.Draw(sheet, "RGBA")
-    ox = col * FRAME_W
-    oy = row * FRAME_H
-    shoulder = (ox + 86, oy + 79)
-    sweep = -145 + 250 * phase
-    upper_len = 28
-    fore_len = 30
-    sword_len = 78
-    upper_angle = math.radians(sweep - 18)
-    fore_angle = math.radians(sweep + 18 * math.sin(phase * math.pi))
-    elbow = (
-        shoulder[0] + math.cos(upper_angle) * upper_len,
-        shoulder[1] + math.sin(upper_angle) * upper_len,
-    )
-    hand = (
-        elbow[0] + math.cos(fore_angle) * fore_len,
-        elbow[1] + math.sin(fore_angle) * fore_len,
-    )
-    tip = (
-        hand[0] + math.cos(fore_angle) * sword_len,
-        hand[1] + math.sin(fore_angle) * sword_len,
-    )
-    guard_a = fore_angle + math.pi / 2
-    guard_1 = (hand[0] + math.cos(guard_a) * 10, hand[1] + math.sin(guard_a) * 10)
-    guard_2 = (hand[0] - math.cos(guard_a) * 10, hand[1] - math.sin(guard_a) * 10)
-
-    trail_alpha = int(190 * math.sin(phase * math.pi))
-    trail_box = [ox + 18, oy + 8, ox + 151, oy + 141]
-    draw.arc(trail_box, int(sweep - 42), int(sweep + 34), fill=(255, 235, 109, trail_alpha), width=14)
-    draw.arc([trail_box[0] + 8, trail_box[1] + 8, trail_box[2] - 8, trail_box[3] - 8], int(sweep - 32), int(sweep + 24), fill=(255, 255, 255, trail_alpha), width=4)
-
-    # Gold-trimmed animated arm drawn above the body so the swing reads clearly.
-    draw.line([shoulder, elbow], fill=(35, 35, 54, 255), width=13)
-    draw.line([shoulder, elbow], fill=(220, 168, 72, 245), width=5)
-    draw.line([elbow, hand], fill=(30, 31, 48, 255), width=12)
-    draw.line([elbow, hand], fill=(70, 190, 245, 230), width=4)
-    draw.ellipse([hand[0] - 7, hand[1] - 7, hand[0] + 7, hand[1] + 7], fill=(236, 185, 98, 255), outline=(255, 243, 176, 255), width=2)
-    draw.line([guard_1, guard_2], fill=(255, 220, 111, 255), width=5)
-    draw.line([hand, tip], fill=(255, 255, 255, 255), width=9)
-    draw.line([hand, tip], fill=(75, 220, 255, 255), width=4)
-    draw.ellipse([tip[0] - 5, tip[1] - 5, tip[0] + 5, tip[1] + 5], fill=(255, 245, 126, 240))
 
 
 def draw_cast_fx(sheet: Image.Image, col: int, row: int, power: float):
@@ -136,6 +137,19 @@ def draw_hurt_fx(sheet: Image.Image, col: int, row: int, power: float):
         draw.line([x1, y1, x2, y2], fill=(255, 78, 92, alpha), width=4)
 
 
+def draw_walk_row(sheet: Image.Image, base: Image.Image):
+    sheet.paste((0, 0, 0, 0), (0, FRAME_H, FRAME_W * COLS, FRAME_H * 2))
+    for col in range(COLS):
+        t = col / COLS * math.tau
+        sprite = transform(base, 1 + abs(math.sin(t)) * 0.025, 1 - abs(math.sin(t)) * 0.035, math.sin(t) * 3)
+        sprite = walk_deform(sprite, t)
+        sprite = apply_walk_pose(sprite, t)
+        paste_center(sheet, sprite, col, 1, xoff=math.sin(t) * 5, yoff=-abs(math.sin(t)) * 7)
+        draw = ImageDraw.Draw(sheet, "RGBA")
+        ox = col * FRAME_W
+        draw.ellipse([ox + 52, 137, ox + 108, 150], fill=(215, 198, 139, int(70 + abs(math.sin(t)) * 60)))
+
+
 def main():
     src = Image.open(SOURCE).convert("RGBA")
     base = fit_sprite(src)
@@ -148,13 +162,7 @@ def main():
         paste_center(sheet, sprite, col, 0, yoff=math.sin(t) * -3)
 
     # Row 1: walk
-    for col in range(COLS):
-        t = col / COLS * math.tau
-        sprite = transform(base, 1 + abs(math.sin(t)) * 0.045, 1 - abs(math.sin(t)) * 0.06, math.sin(t) * 7)
-        paste_center(sheet, sprite, col, 1, xoff=math.sin(t) * 6, yoff=-abs(math.sin(t)) * 8)
-        draw = ImageDraw.Draw(sheet, "RGBA")
-        ox = col * FRAME_W
-        draw.ellipse([ox + 52, 137, ox + 108, 150], fill=(215, 198, 139, int(70 + abs(math.sin(t)) * 60)))
+    draw_walk_row(sheet, base)
 
     # Row 2: attack
     for col in range(COLS):
@@ -163,7 +171,6 @@ def main():
         sprite = transform(base, 1 + p * 0.09, 1 - p * 0.04, -18 + p * 30, 1 + p * 0.14)
         paste_center(sheet, sprite, col, 2, xoff=p * 24, yoff=-p * 4)
         draw_attack_fx(sheet, col, 2, p)
-        draw_attack_arm(sheet, col, 2, phase)
 
     # Row 3: hurt
     for col in range(COLS):
@@ -178,6 +185,9 @@ def main():
         sprite = transform(base, 1 + p * 0.07, 1 + p * 0.07, p * -5, 1 + p * 0.18)
         paste_center(sheet, sprite, col, 4, yoff=-p * 12)
         draw_cast_fx(sheet, col, 4, p)
+
+    # Redraw the walk row last so oversized attack effects cannot bleed into it.
+    draw_walk_row(sheet, base)
 
     sheet.save(OUT)
     print(OUT)

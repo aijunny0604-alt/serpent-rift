@@ -3,6 +3,7 @@ const ctx = canvas.getContext("2d");
 
 const W = canvas.width;
 const H = canvas.height;
+const BOSS_KILL_INTERVAL = 14;
 const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 canvas.width = W * DPR;
 canvas.height = H * DPR;
@@ -23,6 +24,7 @@ const stages = [
 const sprites = {
   player: loadImage("./assets/player.png"),
   playerSheet: loadImage("./assets/player-action-sheet.png"),
+  titleKeyart: loadImage("./assets/title-keyart-serpent-rift.png"),
   skillIcons: loadImage("./assets/skill-icons.png"),
   itemIcons: loadImage("./assets/item-icons.png"),
   uiPanel: loadImage("./assets/ui-panel.png"),
@@ -35,6 +37,12 @@ const sprites = {
   eliteSheet: loadImage("./assets/elite-action-sheet.png"),
   boss: loadImage("./assets/boss.png"),
   bossSheet: loadImage("./assets/boss-action-sheet.png"),
+  bossSheets: [
+    loadImage("./assets/boss-forest-action-sheet.png"),
+    loadImage("./assets/boss-volcano-action-sheet.png"),
+    loadImage("./assets/boss-frost-action-sheet.png"),
+    loadImage("./assets/boss-void-action-sheet.png"),
+  ],
 };
 
 const playerSheet = {
@@ -131,6 +139,7 @@ const state = {
   shake: 0,
   score: 0,
   kills: 0,
+  nextBossKills: BOSS_KILL_INTERVAL,
   wave: 1,
   stageIndex: 0,
   stageIntro: 3,
@@ -183,6 +192,7 @@ const player = {
   castColor: "#ffd965",
   hurtAnim: 0,
   stepAnim: 0,
+  movePower: 0,
   footstepTimer: 0,
   isMoving: false,
 };
@@ -280,7 +290,7 @@ function syncStageForWave() {
     state.messageTime = 2;
     state.powerFlash = Math.max(state.powerFlash, 0.55);
     state.shockwave = 1;
-    state.shake = Math.max(state.shake, 16);
+    state.shake = Math.max(state.shake, 8);
   }
 }
 
@@ -428,11 +438,13 @@ function spawnEnemy(kind = "shade") {
 
 function spawnBoss() {
   state.bossMode = true;
-  state.message = "ANCIENT SERPENT AWAKENS";
+  const bossTitles = ["ANCIENT TREANT AWAKENS", "LAVA WARLORD AWAKENS", "FROST QUEEN AWAKENS", "VOID WATCHER AWAKENS"];
+  state.message = bossTitles[state.stageIndex % bossTitles.length];
   state.messageTime = 2.2;
   enemies.length = 0;
   enemies.push({
     kind: "boss",
+    stageIndex: state.stageIndex,
     x: W * 0.55,
     y: H * 0.33,
     r: 58,
@@ -527,6 +539,7 @@ function spawnLoot(x, y, enemyKind) {
 }
 
 function damageEnemy(enemy, amount, color = "#fff2a5", sourceX = player.x, sourceY = player.y) {
+  if (enemy.dead) return;
   const finalAmount = Math.floor(amount);
   const crit = finalAmount >= player.atk * 1.75 || Math.random() < 0.18;
   const heavy = crit || finalAmount >= player.atk * 1.25;
@@ -553,12 +566,14 @@ function damageEnemy(enemy, amount, color = "#fff2a5", sourceX = player.x, sourc
   hazards.push({ type: "impact", x: enemy.x, y: enemy.y - enemy.r * 0.1, life: crit ? 0.58 : 0.38, max: crit ? 0.58 : 0.38, color, crit, heavy });
   hazards.push({ type: "powerBurst", x: enemy.x, y: enemy.y, angle: Math.atan2(enemy.y - sourceY, enemy.x - sourceX), life: heavy ? 0.34 : 0.22, max: heavy ? 0.34 : 0.22, color, crit, heavy });
   addParticle(enemy.x, enemy.y, color, crit ? 42 : 22, crit ? 1.7 : 1.12);
-  state.shake = Math.max(state.shake, crit ? 22 : heavy ? 14 : 8);
+  state.shake = Math.max(state.shake, crit ? 14 : heavy ? 9 : 5);
   state.hitStop = Math.max(state.hitStop, crit ? 0.075 : heavy ? 0.045 : 0.025);
   state.powerFlash = Math.max(state.powerFlash, crit ? 0.42 : 0.24);
   state.shockwave = Math.max(state.shockwave, crit ? 1 : 0.55);
   playSfx(crit ? "crit" : "hit");
   if (enemy.hp <= 0) {
+    enemy.dead = true;
+    enemy.hp = 0;
     const gain = enemy.kind === "boss" ? 160 : enemy.kind === "elite" ? 36 : 18;
     player.exp += gain;
     state.gold += enemy.kind === "boss" ? 90 : enemy.kind === "elite" ? 14 : 6;
@@ -649,7 +664,7 @@ function castUltimate() {
   state.messageTime = 1.4;
   state.powerFlash = 0.75;
   state.shockwave = 1;
-  state.shake = Math.max(state.shake, 26);
+  state.shake = Math.max(state.shake, 16);
   state.hitStop = Math.max(state.hitStop, 0.08);
   spawnSkillAura(target.x, target.y, "ultimate", 230, 1.3);
   hazards.push({ type: "ultimate", x: target.x, y: target.y, life: 1.35, max: 1.35, color: "#ffffff", tick: 0 });
@@ -754,7 +769,7 @@ function castSkill(index) {
       hazards.push({ type: "lightningStrike", x, y, life: 0.42 + i * 0.035, max: 0.42 + i * 0.035, color: s.color, delay: i * 0.045 });
     }
     state.powerFlash = Math.max(state.powerFlash, 0.42);
-    state.shake = Math.max(state.shake, 16);
+    state.shake = Math.max(state.shake, 9);
   }
   if (s.id === "inferno") {
     player.attackAnim = 0.5;
@@ -765,7 +780,7 @@ function castSkill(index) {
       hazards.push({ type: "flamePillar", x: rand(58, W - 58), y: rand(190, H - 180), life: 0.9 + i * 0.04, max: 0.9 + i * 0.04, color: s.color, delay: i * 0.06, scale: rand(0.75, 1.2) });
     }
     state.powerFlash = Math.max(state.powerFlash, 0.35);
-    state.shake = Math.max(state.shake, 18);
+    state.shake = Math.max(state.shake, 10);
   }
 }
 
@@ -787,7 +802,7 @@ function update(dt) {
   state.messageTime = Math.max(0, state.messageTime - dt);
   state.stageIntro = Math.max(0, state.stageIntro - dt);
   state.comboTime = Math.max(0, state.comboTime - dt);
-  state.shake = Math.max(0, state.shake - dt * 18);
+  state.shake = Math.max(0, state.shake - dt * 24);
   state.lootFlash = Math.max(0, state.lootFlash - dt);
   state.powerFlash = Math.max(0, state.powerFlash - dt * 1.8);
   state.shockwave = Math.max(0, state.shockwave - dt * 2.4);
@@ -833,16 +848,26 @@ function update(dt) {
       player.isMoving = true;
     }
   }
+  player.movePower += ((player.isMoving ? 1 : 0) - player.movePower) * Math.min(1, dt * 12);
   if (player.isMoving && player.footstepTimer <= 0) {
-    player.footstepTimer = 0.13;
-    hazards.push({ type: "dust", x: player.x - Math.cos(player.facing) * 16 + rand(-5, 5), y: player.y - Math.sin(player.facing) * 10 + 22, life: 0.42, max: 0.42, color: "#d7c68b" });
+    player.footstepTimer = 0.115;
+    const side = Math.sin(player.stepAnim) > 0 ? 1 : -1;
+    const backX = player.x - Math.cos(player.facing) * 18;
+    const backY = player.y - Math.sin(player.facing) * 12 + 22;
+    const sideX = Math.cos(player.facing + Math.PI / 2) * side * 11;
+    const sideY = Math.sin(player.facing + Math.PI / 2) * side * 7;
+    hazards.push({ type: "dust", x: backX + sideX + rand(-3, 3), y: backY + sideY + rand(-2, 2), life: 0.46, max: 0.46, color: "#d7c68b" });
   }
   player.x = clamp(player.x, 38, W - 38);
   player.y = clamp(player.y, 150, H - 135);
 
-  if (!state.bossMode && state.kills > 0 && state.kills % 14 === 0 && !enemies.some((e) => e.kind === "boss")) {
+  if (state.bossMode && !enemies.some((e) => e.kind === "boss")) {
+    state.bossMode = false;
+  }
+
+  if (!state.bossMode && state.kills >= state.nextBossKills && !enemies.some((e) => e.kind === "boss")) {
+    state.nextBossKills += BOSS_KILL_INTERVAL;
     spawnBoss();
-    state.kills += 1;
   }
 
   const maxRegular = state.bossMode ? 1 : Math.min(8, 3 + state.wave);
@@ -887,7 +912,7 @@ function update(dt) {
       player.invuln = 0.55;
       player.hurtAnim = 0.38;
       e.attackAnim = 0.34;
-      state.shake = 8;
+      state.shake = 5;
       hits.push({ x: player.x, y: player.y - 24, vx: rand(-12, 12), vy: -86, text: `-${e.atk}`, life: 0.75, max: 0.75, color: "#ff7184", crit: false, spin: rand(-0.12, 0.12), playerHit: true });
       hazards.push({ type: "impact", x: player.x, y: player.y - 4, life: 0.32, max: 0.32, color: "#ff7184", crit: false });
       addParticle(player.x, player.y, "#ff7184", 12, 0.8);
@@ -917,7 +942,7 @@ function update(dt) {
     }
     if (h.type === "meteorMark" && h.life <= 0.14 && !h.done) {
       h.done = true;
-      state.shake = Math.max(state.shake, 18);
+      state.shake = Math.max(state.shake, 10);
       state.powerFlash = Math.max(state.powerFlash, 0.35);
       for (const e of enemiesInRange(h.x, h.y, 126)) {
         damageEnemy(e, player.atk * 3.8 + rand(18, 36), h.color, h.x, h.y - 200);
@@ -954,7 +979,7 @@ function update(dt) {
           damageEnemy(target, player.atk * 2.8 + rand(15, 32), "#ffffff", h.prevX, h.prevY);
           h.prevX = player.x;
           h.prevY = player.y;
-          state.shake = Math.max(state.shake, 18);
+          state.shake = Math.max(state.shake, 10);
           state.powerFlash = Math.max(state.powerFlash, 0.26);
         }
         h.index += 1;
@@ -983,7 +1008,7 @@ function update(dt) {
         if (dist(player.x, player.y, h.x, h.y) < h.maxR && player.invuln <= 0) {
           player.hp -= 26 + state.wave * 2;
           player.invuln = 0.75;
-          state.shake = 12;
+          state.shake = 7;
         }
       }
     }
@@ -1166,9 +1191,9 @@ function roundRect(x, y, w, h, r) {
 function drawBackground() {
   const stage = currentStage();
   const img = stage.image;
-  const blur = Math.min(4, state.powerFlash * 3 + state.shockwave * 1.6 + (player.attackAnim > 0 ? 0.8 : 0));
+  const blur = Math.min(1.8, state.powerFlash * 1.35 + state.shockwave * 0.75 + (player.attackAnim > 0 ? 0.22 : 0));
   ctx.save();
-  if (blur > 0.08) ctx.filter = `blur(${blur}px) saturate(${1 + blur * 0.08})`;
+  if (blur > 0.12) ctx.filter = `blur(${blur}px) saturate(${1 + blur * 0.035})`;
   if (img.complete) {
     const scale = Math.max(W / img.width, H / img.height);
     const bw = img.width * scale;
@@ -1194,9 +1219,10 @@ function drawBackground() {
 function drawEntity(e) {
   const boss = e.kind === "boss";
   const sprite = sprites[e.kind] || sprites.shade;
-  const sheet = boss ? sprites.bossSheet : e.kind === "elite" ? sprites.eliteSheet : sprites.shadeSheet;
+  const bossStageIndex = boss ? (e.stageIndex ?? state.stageIndex) % stages.length : state.stageIndex;
+  const sheet = boss ? (sprites.bossSheets?.[bossStageIndex] || sprites.bossSheet) : e.kind === "elite" ? sprites.eliteSheet : sprites.shadeSheet;
   const size = boss ? 172 : e.kind === "elite" ? 74 : 55;
-  const stage = currentStage();
+  const stage = boss ? stages[bossStageIndex] : currentStage();
   ctx.save();
   const bob = Math.sin(e.pulse * (boss ? 2.1 : 6.2)) * (boss ? 4 : 3);
   const hitJerk = e.hit > 0 ? Math.sin(e.hit * 55) * 6 : 0;
@@ -1204,13 +1230,13 @@ function drawEntity(e) {
   const face = Math.atan2(player.y - e.y, player.x - e.x);
   ctx.translate(e.x + Math.cos(face) * lunge + hitJerk, e.y + bob + Math.sin(face) * lunge);
   ctx.globalAlpha = e.hit > 0 ? 0.82 : 1;
-  ctx.shadowBlur = boss ? 32 : 16;
+  ctx.shadowBlur = boss ? 38 : 16;
   ctx.shadowColor = boss ? stage.enemyColor : e.kind === "elite" ? "#d66bff" : stage.enemyColor;
   const hurtSquash = e.hit > 0 ? Math.sin(e.hit * 35) * 0.12 : 0;
   const pulse = Math.sin(e.pulse * 5) * 0.05 + 1 + (e.attackAnim > 0 ? 0.08 : 0);
   ctx.rotate((boss ? 0.035 : 0.08) * Math.sin(e.pulse * 4) + (e.hit > 0 ? 0.12 * Math.sin(e.hit * 80) : 0));
   ctx.scale(pulse + hurtSquash, pulse - hurtSquash * 0.6);
-  ctx.fillStyle = boss ? "rgba(20, 54, 27, .46)" : "rgba(0, 0, 0, .32)";
+  ctx.fillStyle = boss ? "rgba(2, 8, 13, .52)" : "rgba(0, 0, 0, .32)";
   ctx.beginPath();
   ctx.ellipse(0, size * 0.27, size * 0.34, size * 0.13, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -1234,7 +1260,24 @@ function drawEntity(e) {
     ctx.stroke();
     ctx.restore();
   }
-  const stageTint = state.stageIndex > 0
+  if (boss) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.28 + Math.sin(e.pulse * 2.2) * 0.06;
+    ctx.strokeStyle = stage.enemyColor;
+    ctx.shadowBlur = 22;
+    ctx.shadowColor = stage.enemyColor;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.02, size * 0.5, size * 0.23, e.pulse * 0.18, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.02, size * 0.36, size * 0.15, -e.pulse * 0.14, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  const stageTint = !boss && state.stageIndex > 0
     ? stage.tint.replace(".16", ".24").replace(".18", ".24").replace(".10", ".18")
     : null;
   const hitTint = e.hit > 0 ? "rgba(255, 247, 185, .55)" : null;
@@ -1269,7 +1312,7 @@ function drawEntity(e) {
     ctx.stroke();
   }
   ctx.restore();
-  drawBar(e.x - e.r, e.y - e.r - 14, e.r * 2, 5, e.hp, e.maxHp, boss ? "#8eff65" : "#f3b75f");
+  drawBar(e.x - e.r, e.y - e.r - 14, e.r * 2, 5, e.hp, e.maxHp, boss ? (stages[(e.stageIndex ?? state.stageIndex) % stages.length].enemyColor) : "#f3b75f");
 }
 
 function drawSpriteCutout(sprite, size, tint = null) {
@@ -1298,7 +1341,7 @@ function playerActionFrame() {
     return { action: "cast", frame: Math.min(5, Math.floor((1 - player.castAnim / 0.48) * 6)) };
   }
   if (player.isMoving) {
-    return { action: "walk", frame: Math.floor(player.stepAnim * 0.72) % 6 };
+    return { action: "walk", frame: Math.floor(player.stepAnim) % 6 };
   }
   return { action: "idle", frame: Math.floor(state.t * 5) % 6 };
 }
@@ -1322,22 +1365,36 @@ function drawPlayerSheetFrame(size, tint = null) {
 }
 
 function drawSwordSwing(phase) {
-  const eased = phase < 0.5 ? 2 * phase * phase : 1 - Math.pow(-2 * phase + 2, 2) / 2;
+  const windup = clamp(phase / 0.26, 0, 1);
+  const strike = clamp((phase - 0.18) / 0.48, 0, 1);
+  const recover = clamp((phase - 0.62) / 0.38, 0, 1);
+  const eased = strike < 0.5 ? 2 * strike * strike : 1 - Math.pow(-2 * strike + 2, 2) / 2;
   const alpha = Math.sin(phase * Math.PI);
-  const sweepStart = -1.35;
-  const sweepEnd = 1.08;
-  const bladeAngle = sweepStart + (sweepEnd - sweepStart) * eased;
+  const impact = Math.sin(clamp((phase - 0.34) / 0.32, 0, 1) * Math.PI);
+  const sweepStart = -1.62 + windup * 0.18;
+  const sweepEnd = 1.18 + impact * 0.16 - recover * 0.12;
+  const bladeAngle = sweepStart + (sweepEnd - sweepStart) * eased + Math.sin(recover * Math.PI) * 0.12;
   const baseRotation = player.facing + Math.PI / 2;
 
   ctx.save();
   ctx.rotate(baseRotation);
   ctx.globalCompositeOperation = "lighter";
   ctx.save();
-  ctx.filter = "blur(9px)";
-  ctx.globalAlpha = alpha * 0.34;
+  ctx.globalAlpha = clamp((1 - windup) * 0.35 + impact * 0.35, 0, 0.55);
+  ctx.strokeStyle = "rgba(255, 242, 165, .72)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.arc(0, 8, 104, -1.55, -0.55 + windup * 0.22);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+  ctx.save();
+  ctx.filter = "blur(5px)";
+  ctx.globalAlpha = alpha * 0.26 + impact * 0.18;
   ctx.fillStyle = "rgba(103, 231, 255, .58)";
   ctx.beginPath();
-  ctx.ellipse(28, 8, 148, 64, bladeAngle * 0.16, 0, Math.PI * 2);
+  ctx.ellipse(28, 8, 148 + impact * 34, 64 + impact * 14, bladeAngle * 0.16, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
@@ -1418,10 +1475,10 @@ function drawSwordSwing(phase) {
   ctx.stroke();
   ctx.restore();
 
-  for (let i = 0; i < 7; i += 1) {
+  for (let i = 0; i < 9; i += 1) {
     const trailPhase = clamp(eased - i * 0.07, 0, 1);
     const a = sweepStart + (sweepEnd - sweepStart) * trailPhase;
-    const depth = 1 - i / 7;
+    const depth = 1 - i / 9;
     const radius = 88 - i * 6;
     ctx.save();
     ctx.globalAlpha = clamp(alpha * (0.82 - i * 0.07), 0, 0.82);
@@ -1430,7 +1487,7 @@ function drawSwordSwing(phase) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = i < 2 ? "rgba(255,255,255,.86)" : i < 5 ? "rgba(255,218,72,.55)" : "rgba(67,230,255,.38)";
-    ctx.lineWidth = 28 * depth + 3;
+    ctx.lineWidth = 28 * depth + 3 + impact * 4;
     ctx.beginPath();
     ctx.arc(9 + i * 1.5, 7 + i * 0.8, radius, a - 0.18 - depth * 0.16, a + 0.26 + depth * 0.08);
     ctx.stroke();
@@ -1452,6 +1509,22 @@ function drawSwordSwing(phase) {
   const handY = Math.sin(bladeAngle) * 20 + 2;
   const tipX = Math.cos(bladeAngle) * 124;
   const tipY = Math.sin(bladeAngle) * 110 + 2;
+  for (let i = 1; i <= 4; i += 1) {
+    const ghostPhase = clamp(eased - i * 0.09, 0, 1);
+    const ghostAngle = sweepStart + (sweepEnd - sweepStart) * ghostPhase;
+    ctx.save();
+    ctx.globalAlpha = alpha * (0.2 - i * 0.026);
+    ctx.strokeStyle = i % 2 ? "rgba(87,223,255,.58)" : "rgba(255,217,101,.5)";
+    ctx.lineWidth = 8 - i;
+    ctx.lineCap = "round";
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = "#57dfff";
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ghostAngle) * 18, Math.sin(ghostAngle) * 18 + 2);
+    ctx.lineTo(Math.cos(ghostAngle) * (116 - i * 7), Math.sin(ghostAngle) * (104 - i * 5) + 2);
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.globalAlpha = clamp(alpha, 0, 1);
   ctx.shadowBlur = 26;
   ctx.shadowColor = "#8df5ff";
@@ -1461,6 +1534,25 @@ function drawSwordSwing(phase) {
   ctx.moveTo(handX, handY);
   ctx.lineTo(tipX, tipY);
   ctx.stroke();
+
+  ctx.save();
+  ctx.globalAlpha = clamp(0.72 + impact * 0.28, 0, 1);
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = "#ffd965";
+  ctx.strokeStyle = "rgba(255, 229, 112, .95)";
+  ctx.lineWidth = 8;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(handX - Math.cos(bladeAngle) * 9, handY - Math.sin(bladeAngle) * 9);
+  ctx.lineTo(handX + Math.cos(bladeAngle + Math.PI / 2) * 18, handY + Math.sin(bladeAngle + Math.PI / 2) * 18);
+  ctx.moveTo(handX - Math.cos(bladeAngle) * 9, handY - Math.sin(bladeAngle) * 9);
+  ctx.lineTo(handX + Math.cos(bladeAngle - Math.PI / 2) * 18, handY + Math.sin(bladeAngle - Math.PI / 2) * 18);
+  ctx.stroke();
+  ctx.fillStyle = "#fff2a5";
+  ctx.beginPath();
+  ctx.arc(handX, handY, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
   ctx.strokeStyle = "rgba(89, 224, 255, .86)";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -1507,6 +1599,23 @@ function drawSwordSwing(phase) {
   ctx.beginPath();
   ctx.arc(tipX, tipY, 10 + alpha * 13, 0, Math.PI * 2);
   ctx.fill();
+  if (impact > 0.04) {
+    ctx.save();
+    ctx.globalAlpha = impact * 0.72;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 32;
+    ctx.shadowColor = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, 18 + impact * 42, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(87,223,255,.65)";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, 32 + impact * 68, -0.4, Math.PI * 1.2);
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.restore();
 }
 
@@ -1514,13 +1623,22 @@ function drawPlayer() {
   const size = 104;
   ctx.save();
   const moving = player.isMoving;
+  const walkPower = player.movePower || 0;
   const walkFrame = Math.sin(player.stepAnim);
-  const walkBob = moving ? Math.abs(walkFrame) * -7 : Math.sin(state.t * 4) * 1.5;
+  const walkCross = Math.cos(player.stepAnim);
+  const walkBob = moving ? Math.abs(walkFrame) * -8.5 * walkPower : Math.sin(state.t * 4) * 1.5;
+  const sideStep = walkCross * 3.8 * walkPower;
+  const breath = Math.sin(state.t * 4) * (1 - walkPower) * 1.2;
   const attackPhase = player.attackAnim > 0 ? clamp(1 - player.attackAnim / 0.46, 0, 1) : 0;
-  const slashPush = player.attackAnim > 0 ? Math.sin(attackPhase * Math.PI) * 30 : 0;
+  const slashPush = player.attackAnim > 0 ? Math.sin(attackPhase * Math.PI) * 34 : 0;
   const castLift = player.castAnim > 0 ? Math.sin((1 - player.castAnim / 0.48) * Math.PI) * -8 : 0;
   const hurtShake = player.hurtAnim > 0 ? Math.sin(player.hurtAnim * 95) * 8 : 0;
-  ctx.translate(player.x + Math.cos(player.facing) * slashPush + hurtShake, player.y + walkBob + castLift + Math.sin(player.facing) * slashPush);
+  const sideX = Math.cos(player.facing + Math.PI / 2) * sideStep;
+  const sideY = Math.sin(player.facing + Math.PI / 2) * sideStep * 0.55;
+  ctx.translate(
+    player.x + Math.cos(player.facing) * slashPush + hurtShake + sideX,
+    player.y + walkBob + breath + castLift + Math.sin(player.facing) * slashPush + sideY,
+  );
   const blink = player.invuln > 0 && Math.floor(state.t * 18) % 2 === 0;
   ctx.globalAlpha = blink ? 0.5 : 1;
   ctx.shadowBlur = 24;
@@ -1545,6 +1663,16 @@ function drawPlayer() {
   ctx.beginPath();
   ctx.arc(0, 4, 30 + Math.sin(state.t * 5) * 2, 0, Math.PI * 2);
   ctx.stroke();
+  if (moving) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.16 + walkPower * 0.16;
+    ctx.translate(-Math.cos(player.facing) * 14, -Math.sin(player.facing) * 7);
+    ctx.rotate(walkFrame * 0.08);
+    drawPlayerSheetFrame(size, "rgba(87, 223, 255, .45)");
+    ctx.restore();
+
+  }
   if (player.attackAnim > 0) {
     ctx.save();
     ctx.globalAlpha = 0.3 * Math.sin(attackPhase * Math.PI);
@@ -1567,11 +1695,13 @@ function drawPlayer() {
     }
     ctx.restore();
   }
-  const attackLean = player.attackAnim > 0 ? 0.42 * Math.sin(attackPhase * Math.PI) : 0;
+  const attackLean = player.attackAnim > 0 ? 0.48 * Math.sin(attackPhase * Math.PI) : 0;
   const castScale = player.castAnim > 0 ? 1 + Math.sin((1 - player.castAnim / 0.48) * Math.PI) * 0.12 : 1;
   const hurtSquash = player.hurtAnim > 0 ? Math.sin(player.hurtAnim * 34) * 0.18 : 0;
-  ctx.rotate(walkFrame * (moving ? 0.12 : 0.02) + attackLean);
-  ctx.scale((1 + Math.abs(walkFrame) * (moving ? 0.04 : 0)) * castScale + hurtSquash, (1 - Math.abs(walkFrame) * (moving ? 0.05 : 0)) * castScale - hurtSquash * 0.35);
+  const gaitLean = walkFrame * 0.13 * walkPower + walkCross * 0.035 * walkPower;
+  const strideStretch = Math.abs(walkFrame) * walkPower;
+  ctx.rotate(gaitLean + attackLean);
+  ctx.scale((1 + strideStretch * 0.055) * castScale + hurtSquash, (1 - strideStretch * 0.065) * castScale - hurtSquash * 0.35);
   const tint = player.hurtAnim > 0 ? "rgba(255, 70, 85, .45)" : player.castAnim > 0 ? "rgba(255, 236, 143, .22)" : null;
   drawPlayerSheetFrame(size, tint);
   if (player.attackAnim > 0) drawSwordSwing(attackPhase);
@@ -1778,23 +1908,45 @@ function drawHazard(h) {
     ctx.stroke();
   }
   if (h.type === "slash") {
-    ctx.globalAlpha = clamp(h.life / 0.18, 0, 1);
+    const p = 1 - h.life / 0.24;
+    const a = clamp(h.life / 0.24, 0, 1);
     const angle = Math.atan2(h.ty - h.y, h.tx - h.x);
     ctx.translate(h.tx, h.ty);
     ctx.rotate(angle);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.save();
+    ctx.globalAlpha = a * 0.42;
+    ctx.filter = "blur(4px)";
+    ctx.strokeStyle = "#57dfff";
+    ctx.lineWidth = 26;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(-22, 0, 62 + p * 22, -1.12, 0.95);
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = a;
     ctx.strokeStyle = h.color;
-    ctx.lineWidth = 14;
+    ctx.lineWidth = 17;
     ctx.lineCap = "round";
     ctx.shadowBlur = 26;
     ctx.shadowColor = h.color;
     ctx.beginPath();
-    ctx.arc(-20, 0, 48, -0.95, 0.82);
+    ctx.arc(-20, 0, 52 + p * 10, -0.95, 0.82);
     ctx.stroke();
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.arc(-20, 0, 48, -0.72, 0.6);
+    ctx.arc(-20, 0, 54 + p * 8, -0.72, 0.6);
     ctx.stroke();
+    for (let i = 0; i < 5; i += 1) {
+      const t = i / 4;
+      ctx.globalAlpha = a * (0.58 - t * 0.08);
+      ctx.strokeStyle = i % 2 ? "#fff2a5" : "#8dfffb";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(-18 + t * 10, -4 + t * 7, 34 + t * 34, -0.82 + t * 0.16, -0.35 + t * 0.3);
+      ctx.stroke();
+    }
   }
   if (h.type === "dust") {
     ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.38;
@@ -1837,7 +1989,7 @@ function drawHazard(h) {
     ctx.rotate(h.angle);
     ctx.globalAlpha = a;
     ctx.save();
-    ctx.filter = "blur(8px)";
+    ctx.filter = "blur(4px)";
     ctx.fillStyle = h.color;
     ctx.beginPath();
     ctx.ellipse(45, 0, h.crit ? 96 : 62, h.crit ? 34 : 24, 0, 0, Math.PI * 2);
@@ -2014,7 +2166,7 @@ function drawProjectile(p) {
   if (p.type === "lance" || p.type === "comet" || p.type === "orb") {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    ctx.filter = "blur(7px)";
+    ctx.filter = "blur(4px)";
     ctx.fillStyle = p.color;
     ctx.globalAlpha *= 0.34;
     ctx.beginPath();
@@ -2315,6 +2467,19 @@ function drawUi() {
   ctx.fillText(`Wave ${state.wave}`, W - 28, 39);
   ctx.fillStyle = "#ffd965";
   ctx.fillText(`${state.gold} gold`, W - 28, 59);
+  if (!state.bossMode) {
+    const progressStart = state.nextBossKills - BOSS_KILL_INTERVAL;
+    const bossProgress = clamp((state.kills - progressStart) / BOSS_KILL_INTERVAL, 0, 1);
+    const remaining = Math.max(0, state.nextBossKills - state.kills);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(2, 9, 7, .58)";
+    roundRect(W - 142, 80, 128, 32, 9);
+    ctx.fill();
+    drawBar(W - 130, 91, 104, 5, bossProgress, 1, currentStage().enemyColor, "rgba(255,255,255,.12)");
+    ctx.fillStyle = "#fff5d7";
+    ctx.font = "800 10px Segoe UI";
+    ctx.fillText(`${remaining} TO BOSS`, W - 130, 105);
+  }
 
   ctx.textAlign = "center";
   ctx.fillStyle = "rgba(2, 9, 7, .58)";
@@ -2329,11 +2494,13 @@ function drawUi() {
 
   if (enemies.some((e) => e.kind === "boss")) {
     const boss = enemies.find((e) => e.kind === "boss");
+    const bossStage = stages[(boss.stageIndex ?? state.stageIndex) % stages.length];
+    const bossNames = ["ANCIENT TREANT", "LAVA WARLORD", "FROST QUEEN", "VOID WATCHER"];
     ctx.textAlign = "center";
     ctx.fillStyle = "#fff5d7";
     ctx.font = "800 14px Segoe UI";
-    ctx.fillText("ANCIENT SERPENT", W / 2, 111);
-    drawBar(50, 120, W - 100, 12, boss.hp, boss.maxHp, "#8eff65", "rgba(0,0,0,.55)");
+    ctx.fillText(bossNames[(boss.stageIndex ?? state.stageIndex) % bossNames.length], W / 2, 111);
+    drawBar(50, 120, W - 100, 12, boss.hp, boss.maxHp, bossStage.enemyColor, "rgba(0,0,0,.55)");
   }
 
   const baseX = W - 68;
@@ -2471,127 +2638,143 @@ function startGame() {
   state.stageIntro = 2.2;
   state.powerFlash = 0.42;
   state.shockwave = 0.72;
-  state.shake = 18;
+  state.shake = 8;
 }
 
 function drawTitleScreen() {
   const t = state.t;
-  const stage = stages[3] || currentStage();
-  const img = stage.image.complete ? stage.image : bg;
+  const img = sprites.titleKeyart.complete ? sprites.titleKeyart : bg;
   ctx.save();
   if (img.complete && img.naturalWidth > 0) {
     const scale = Math.max(W / img.width, H / img.height);
     const bw = img.width * scale;
     const bh = img.height * scale;
-    ctx.filter = "blur(2px) saturate(1.35) contrast(1.08)";
-    ctx.drawImage(img, (W - bw) / 2, (H - bh) / 2, bw, bh);
+    ctx.filter = "saturate(.95) contrast(1.08) brightness(.84)";
+    ctx.drawImage(img, (W - bw) / 2, (H - bh) / 2 - H * 0.015, bw, bh);
     ctx.filter = "none";
   } else {
-    ctx.fillStyle = "#071019";
+    ctx.fillStyle = "#06070d";
     ctx.fillRect(0, 0, W, H);
   }
 
-  const vignette = ctx.createRadialGradient(W * 0.5, H * 0.36, 40, W * 0.5, H * 0.52, H * 0.72);
-  vignette.addColorStop(0, "rgba(38, 255, 210, .08)");
-  vignette.addColorStop(0.48, "rgba(6, 10, 22, .22)");
-  vignette.addColorStop(1, "rgba(0, 0, 0, .86)");
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "rgba(2, 5, 12, .18)");
+  sky.addColorStop(0.28, "rgba(2, 5, 12, .08)");
+  sky.addColorStop(0.62, "rgba(5, 7, 14, .20)");
+  sky.addColorStop(1, "rgba(0, 0, 0, .72)");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  const vignette = ctx.createRadialGradient(W * 0.52, H * 0.46, 42, W * 0.5, H * 0.5, H * 0.72);
+  vignette.addColorStop(0, "rgba(63, 255, 210, .05)");
+  vignette.addColorStop(0.52, "rgba(7, 12, 22, .06)");
+  vignette.addColorStop(1, "rgba(0, 0, 0, .78)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, W, H);
 
   ctx.globalCompositeOperation = "lighter";
-  for (let i = 0; i < 7; i += 1) {
-    const p = (t * 0.18 + i / 7) % 1;
-    const x = W * (0.1 + i * 0.14);
-    const y = H * (0.18 + p * 0.62);
-    const hue = [185, 275, 45, 330][i % 4];
-    ctx.strokeStyle = `hsla(${hue}, 100%, 68%, ${0.16 - p * 0.09})`;
-    ctx.shadowBlur = 22;
-    ctx.shadowColor = ctx.strokeStyle;
-    ctx.lineWidth = 2 + i % 3;
+  for (let i = 0; i < 5; i += 1) {
+    const p = (t * 0.035 + i / 5) % 1;
+    const x = W * (0.18 + i * 0.18);
+    const y = H * (0.2 + p * 0.28);
+    ctx.strokeStyle = `rgba(88, 232, 202, ${0.035 + (1 - p) * 0.045})`;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = "#54f0cf";
+    ctx.lineWidth = 0.9;
     ctx.beginPath();
-    ctx.moveTo(x - 28, y - 80);
-    ctx.bezierCurveTo(x + 32, y - 24, x - 42, y + 36, x + 22, y + 92);
+    ctx.moveTo(x - 18, y - 24);
+    ctx.bezierCurveTo(x + 18, y - 16, x - 18, y + 24, x + 18, y + 32);
     ctx.stroke();
   }
   ctx.globalCompositeOperation = "source-over";
 
   ctx.save();
-  ctx.translate(W * 0.68, H * 0.36 + Math.sin(t * 1.6) * 6);
-  ctx.rotate(-0.08 + Math.sin(t * 1.1) * 0.035);
-  ctx.globalAlpha = 0.52;
-  ctx.shadowBlur = 54;
-  ctx.shadowColor = "#a45cff";
-  if (sprites.boss.complete && sprites.boss.naturalWidth > 0) {
-    ctx.drawImage(sprites.boss, -128, -154, 256, 256);
+  ctx.globalAlpha = 0.74;
+  ctx.strokeStyle = "rgba(208, 174, 101, .42)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(42, 126);
+  ctx.lineTo(W - 42, 126);
+  ctx.moveTo(58, 138);
+  ctx.lineTo(W - 58, 138);
+  ctx.stroke();
+  for (const x of [52, W - 52]) {
+    ctx.save();
+    ctx.translate(x, 132);
+    ctx.rotate(Math.PI / 4);
+    ctx.strokeStyle = "rgba(255, 226, 144, .62)";
+    ctx.strokeRect(-8, -8, 16, 16);
+    ctx.restore();
   }
-  ctx.globalAlpha = 1;
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(W * 0.28, H * 0.64 + Math.sin(t * 2.1) * 4);
-  ctx.rotate(-0.24);
-  ctx.shadowBlur = 34;
-  ctx.shadowColor = "#57dfff";
-  drawPlayerSheetFrame(150, null);
-  ctx.globalCompositeOperation = "lighter";
-  strokeMultiArc(22, -38, 92, -0.86, 0.54, ["#ffffff", "#57dfff", "#ffd965", "#ff4eea"], 12, 0.72);
-  ctx.globalCompositeOperation = "source-over";
   ctx.restore();
 
   ctx.save();
   ctx.textAlign = "center";
+  ctx.font = "900 56px Georgia, serif";
+  const titleGrad = ctx.createLinearGradient(62, 132, W - 62, 212);
+  titleGrad.addColorStop(0, "#7a4b1e");
+  titleGrad.addColorStop(0.18, "#f6dfa5");
+  titleGrad.addColorStop(0.42, "#ffffff");
+  titleGrad.addColorStop(0.67, "#d5a54f");
+  titleGrad.addColorStop(1, "#694019");
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "rgba(16, 9, 20, .94)";
   ctx.shadowBlur = 26;
-  ctx.shadowColor = "#57dfff";
-  ctx.font = "900 54px Segoe UI";
-  const titleGrad = ctx.createLinearGradient(52, 150, W - 52, 226);
-  titleGrad.addColorStop(0, "#ffffff");
-  titleGrad.addColorStop(0.32, "#57dfff");
-  titleGrad.addColorStop(0.62, "#ffd965");
-  titleGrad.addColorStop(1, "#ff4eea");
+  ctx.shadowColor = "#000000";
+  ctx.strokeText("SERPENT", W / 2, 164);
+  ctx.strokeText("RIFT", W / 2, 216);
   ctx.fillStyle = titleGrad;
-  ctx.fillText("SERPENT RIFT", W / 2, 184);
-  ctx.shadowBlur = 0;
-  ctx.font = "800 13px Segoe UI";
-  ctx.fillStyle = "rgba(235, 252, 255, .82)";
-  ctx.fillText("PHANTOM SLASH ACTION RPG", W / 2, 208);
+  ctx.shadowBlur = 22;
+  ctx.shadowColor = "rgba(247, 210, 117, .5)";
+  ctx.fillText("SERPENT", W / 2, 164);
+  ctx.fillText("RIFT", W / 2, 216);
+  ctx.lineWidth = 1.3;
+  ctx.strokeStyle = "rgba(255, 255, 255, .72)";
+  ctx.strokeText("SERPENT", W / 2, 164);
+  ctx.strokeText("RIFT", W / 2, 216);
 
-  const pulse = 0.72 + Math.sin(t * 4) * 0.16;
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = "#000000";
+  ctx.font = "700 12px Georgia, serif";
+  ctx.fillStyle = "rgba(235, 224, 192, .88)";
+  ctx.fillText("A DARK FANTASY RIFT SAGA", W / 2, 242);
+
+  const pulse = 0.65 + Math.sin(t * 2.4) * 0.14;
   ctx.globalCompositeOperation = "lighter";
-  const buttonGlow = ctx.createRadialGradient(W / 2, H * 0.79, 10, W / 2, H * 0.79, 134);
-  buttonGlow.addColorStop(0, `rgba(87, 223, 255, ${0.26 + pulse * 0.16})`);
-  buttonGlow.addColorStop(0.55, "rgba(255, 217, 101, .10)");
+  const buttonGlow = ctx.createRadialGradient(W / 2, H * 0.82, 8, W / 2, H * 0.82, 142);
+  buttonGlow.addColorStop(0, `rgba(255, 220, 134, ${0.18 + pulse * 0.12})`);
+  buttonGlow.addColorStop(0.58, "rgba(126, 202, 255, .08)");
   buttonGlow.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = buttonGlow;
-  ctx.fillRect(0, H * 0.66, W, H * 0.28);
+  ctx.fillRect(0, H * 0.68, W, H * 0.22);
   ctx.globalCompositeOperation = "source-over";
 
-  ctx.fillStyle = "rgba(2, 8, 16, .62)";
-  roundRect(W / 2 - 112, H * 0.75, 224, 54, 16);
+  const bx = W / 2 - 118;
+  const by = H * 0.805;
+  const bw = 236;
+  const bh = 52;
+  const btnGrad = ctx.createLinearGradient(bx, by, bx, by + bh);
+  btnGrad.addColorStop(0, "rgba(78, 55, 34, .82)");
+  btnGrad.addColorStop(0.5, "rgba(18, 18, 29, .88)");
+  btnGrad.addColorStop(1, "rgba(7, 8, 16, .92)");
+  ctx.fillStyle = btnGrad;
+  roundRect(bx, by, bw, bh, 8);
   ctx.fill();
-  ctx.strokeStyle = `rgba(255, 255, 255, ${0.42 + pulse * 0.24})`;
+  ctx.strokeStyle = `rgba(234, 193, 104, ${0.72 + pulse * 0.2})`;
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.shadowBlur = 18;
-  ctx.shadowColor = "#ffd965";
-  ctx.font = "900 18px Segoe UI";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText("TAP TO START", W / 2, H * 0.75 + 34);
-  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(255, 245, 200, .26)";
+  ctx.strokeRect(bx + 7, by + 7, bw - 14, bh - 14);
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = "#e4b15b";
+  ctx.font = "900 16px Georgia, serif";
+  ctx.fillStyle = "rgba(255, 245, 214, .96)";
+  ctx.fillText("ENTER THE RIFT", W / 2, by + 33);
 
-  const labels = ["AUTO SKILLS", "LOOT DROP", "BOSS RAID", "MULTI STAGE"];
-  labels.forEach((label, i) => {
-    const x = W / 2 - 156 + i * 104;
-    const y = H * 0.87;
-    ctx.fillStyle = "rgba(255, 255, 255, .08)";
-    roundRect(x - 44, y - 16, 88, 30, 9);
-    ctx.fill();
-    ctx.strokeStyle = ["#57dfff", "#ffd965", "#ff4eea", "#8eff65"][i];
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.fillStyle = "rgba(255, 255, 255, .84)";
-    ctx.font = "800 10px Segoe UI";
-    ctx.fillText(label, x, y + 4);
-  });
+  ctx.shadowBlur = 0;
+  ctx.font = "700 11px Georgia, serif";
+  ctx.fillStyle = "rgba(198, 185, 159, .72)";
+  ctx.fillText("TAP ANYWHERE TO BEGIN", W / 2, H * 0.905);
   ctx.restore();
   ctx.restore();
 }
@@ -2602,12 +2785,13 @@ function draw() {
     return;
   }
   ctx.save();
-  const shakeBoost = state.hitStop > 0 ? 1.45 : 1;
-  const sx = rand(-state.shake, state.shake) * shakeBoost;
-  const sy = rand(-state.shake, state.shake) * shakeBoost;
+  const shakeBoost = state.hitStop > 0 ? 1.08 : 1;
+  const cameraShake = Math.min(state.shake, 16) * 0.5;
+  const sx = rand(-cameraShake, cameraShake) * shakeBoost;
+  const sy = rand(-cameraShake, cameraShake) * shakeBoost;
   ctx.translate(sx, sy);
-  if (state.shake > 12) {
-    const zoom = 1 + Math.min(0.035, state.shake * 0.0016);
+  if (state.shake > 14) {
+    const zoom = 1 + Math.min(0.014, state.shake * 0.0007);
     ctx.translate(W / 2, H / 2);
     ctx.scale(zoom, zoom);
     ctx.translate(-W / 2, -H / 2);
@@ -2771,6 +2955,7 @@ function handlePointer(ev) {
     player.targetY = player.y;
     enemies.length = 0;
     hazards.length = 0;
+    state.bossMode = false;
     state.message = "REVIVED";
     state.messageTime = 1.2;
     return;

@@ -49,19 +49,5 @@ canvas {
 }
 
 .hint {
-  position: absolute;
-  left: 50%;
-  bottom: 12px;
-  transform: translateX(-50%);
-  min-width: 220px;
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 233, 153, 0.3);
-  border-radius: 999px;
-  color: rgba(255, 248, 219, 0.86);
-  background: rgba(4, 11, 8, 0.56);
-  font-size: 12px;
-  font-weight: 700;
-  text-align: center;
-  pointer-events: none;
-  backdrop-filter: blur(10px);
+  display: none;
 }
