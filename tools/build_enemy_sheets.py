@@ -17,10 +17,12 @@ def crop_alpha(img):
     return img.crop(bbox)
 
 
-def fit(img, target_h):
+def fit(img, target_h, target_w=None):
     img = crop_alpha(img)
     scale = target_h / img.height
-    return img.resize((max(1, int(img.width * scale)), target_h), Image.Resampling.LANCZOS)
+    if target_w:
+        scale = min(scale, target_w / img.width)
+    return img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))), Image.Resampling.LANCZOS)
 
 
 def transform(base, sx=1, sy=1, rot=0, bright=1):
@@ -90,7 +92,7 @@ def draw_cast_shadow(sheet, col, row, power):
 
 def build(src_name, out_name, target_h):
     src = Image.open(ASSETS / src_name).convert("RGBA")
-    base = fit(src, target_h)
+    base = fit(src, target_h, 96 if "boss" in src_name else None)
     sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H * ROWS), (0, 0, 0, 0))
     for col in range(COLS):
         t = math.tau * col / COLS
@@ -121,7 +123,7 @@ def build(src_name, out_name, target_h):
 
 def build_boss_variant(src_name, out_name, target_h=124, accent=(255, 240, 180, 255)):
     src = Image.open(ASSETS / src_name).convert("RGBA")
-    base = fit(src, target_h)
+    base = fit(src, target_h, 96)
     sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H * ROWS), (0, 0, 0, 0))
     for col in range(COLS):
         t = math.tau * col / COLS
@@ -157,11 +159,11 @@ def build_boss_variant(src_name, out_name, target_h=124, accent=(255, 240, 180, 
 def main():
     build("shade.png", "shade-action-sheet.png", 92)
     build("elite.png", "elite-action-sheet.png", 108)
-    build("boss.png", "boss-action-sheet.png", 124)
-    build_boss_variant("boss-forest.png", "boss-forest-action-sheet.png", 124, (98, 255, 156, 255))
-    build_boss_variant("boss-volcano.png", "boss-volcano-action-sheet.png", 124, (255, 105, 32, 255))
-    build_boss_variant("boss-frost.png", "boss-frost-action-sheet.png", 124, (160, 236, 255, 255))
-    build_boss_variant("boss-void.png", "boss-void-action-sheet.png", 124, (202, 91, 255, 255))
+    build("boss.png", "boss-action-sheet.png", 100)
+    build_boss_variant("boss-forest.png", "boss-forest-action-sheet.png", 100, (98, 255, 156, 255))
+    build_boss_variant("boss-volcano.png", "boss-volcano-action-sheet.png", 100, (255, 105, 32, 255))
+    build_boss_variant("boss-frost.png", "boss-frost-action-sheet.png", 100, (160, 236, 255, 255))
+    build_boss_variant("boss-void.png", "boss-void-action-sheet.png", 100, (202, 91, 255, 255))
 
 
 if __name__ == "__main__":

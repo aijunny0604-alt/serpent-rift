@@ -3,7 +3,8 @@ const ctx = canvas.getContext("2d");
 
 const W = canvas.width;
 const H = canvas.height;
-const BOSS_KILL_INTERVAL = 14;
+const STAGES_PER_FLOOR = 5;
+const KILLS_PER_STAGE = 10;
 const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 canvas.width = W * DPR;
 canvas.height = H * DPR;
@@ -15,15 +16,19 @@ const bg = new Image();
 bg.src = "./assets/serpent-arena.png";
 
 const stages = [
-  { id: "forest", name: "Elderwood Ruins", image: bg, tint: "rgba(37, 255, 170, .10)", enemyColor: "#ffd965" },
-  { id: "volcano", name: "Obsidian Gate", image: loadImage("./assets/stage-volcano.png"), tint: "rgba(255, 86, 24, .16)", enemyColor: "#ff8b3d" },
-  { id: "frost", name: "Frozen Citadel", image: loadImage("./assets/stage-frost.png"), tint: "rgba(90, 214, 255, .16)", enemyColor: "#8dfffb" },
-  { id: "void", name: "Astral Void", image: loadImage("./assets/stage-void.png"), tint: "rgba(190, 88, 255, .18)", enemyColor: "#d66bff" },
+  { id: "forest", name: "Elderwood Ruins", chapter: "제1계층 / 고대수해", lore: "리프트의 입구. 세르펜트 코어의 첫 파편이 뿌리 아래 잠들어 있다.", bossName: "SERPENT ROOT OVERLORD", bossTitle: "계층주 SERPENT ROOT OVERLORD", image: bg, tint: "rgba(37, 255, 170, .10)", enemyColor: "#ffd965", bossScale: 1.54 },
+  { id: "volcano", name: "Obsidian Gate", chapter: "제2계층 / 흑요석 관문", lore: "불타는 차원의 성문. 패배한 기사들의 갑옷이 용암에 녹아 몬스터가 되었다.", bossName: "OBSIDIAN INFERNO TYRANT", bossTitle: "계층주 OBSIDIAN INFERNO TYRANT", image: loadImage("./assets/stage-volcano.png"), tint: "rgba(255, 86, 24, .16)", enemyColor: "#ff8b3d", bossScale: 1.6 },
+  { id: "frost", name: "Frozen Citadel", chapter: "제3계층 / 동결성채", lore: "시간까지 얼어붙은 성채. 이곳의 얼음은 기억을 봉인한다.", bossName: "GLACIAL MEMORY EMPRESS", bossTitle: "계층주 GLACIAL MEMORY EMPRESS", image: loadImage("./assets/stage-frost.png"), tint: "rgba(90, 214, 255, .16)", enemyColor: "#8dfffb", bossScale: 1.56 },
+  { id: "void", name: "Astral Void", chapter: "제4계층 / 별 없는 공허", lore: "별빛과 그림자가 뒤섞인 최심부. 세르펜트 코어의 심장이 이곳에서 맥동한다.", bossName: "ASTRAL ABYSS WATCHER", bossTitle: "계층주 ASTRAL ABYSS WATCHER", image: loadImage("./assets/stage-void.png"), tint: "rgba(190, 88, 255, .18)", enemyColor: "#d66bff", bossScale: 1.68 },
+  { id: "core", name: "Serpent Core Sanctum", chapter: "제5계층 / 코어 성소", lore: "모든 계층주의 파편이 모이는 최심부. 차원의 심장인 세르펜트 코어가 이곳에서 깨어난다.", bossName: "SERPENT CORE ECLIPSE", bossTitle: "최종 계층주 SERPENT CORE ECLIPSE", image: loadImage("./assets/stage-core.png"), tint: "rgba(75, 255, 198, .18)", enemyColor: "#7dffd8", bossScale: 1.82 },
 ];
 
 const sprites = {
   player: loadImage("./assets/player.png"),
   playerSheet: loadImage("./assets/player-action-sheet.png"),
+  playerRidingSheet: loadImage("./assets/player-riding-sheet.png"),
+  portraitHero: loadImage("./assets/portrait-hero.png"),
+  portraitGuide: loadImage("./assets/portrait-guide.png"),
   titleKeyart: loadImage("./assets/title-keyart-serpent-rift.png"),
   skillIcons: loadImage("./assets/skill-icons.png"),
   itemIcons: loadImage("./assets/item-icons.png"),
@@ -42,6 +47,13 @@ const sprites = {
     loadImage("./assets/boss-volcano-action-sheet.png"),
     loadImage("./assets/boss-frost-action-sheet.png"),
     loadImage("./assets/boss-void-action-sheet.png"),
+  ],
+  bossSprites: [
+    loadImage("./assets/boss-floorlord-1.png"),
+    loadImage("./assets/boss-floorlord-2.png"),
+    loadImage("./assets/boss-floorlord-3.png"),
+    loadImage("./assets/boss-floorlord-4.png"),
+    loadImage("./assets/boss-floorlord-5.png"),
   ],
 };
 
@@ -135,14 +147,17 @@ function loadImage(src) {
 const state = {
   t: 0,
   screen: "title",
+  introIndex: 0,
+  introTime: 0,
   paused: false,
   shake: 0,
   score: 0,
   kills: 0,
-  nextBossKills: BOSS_KILL_INTERVAL,
+  nextStageKills: KILLS_PER_STAGE,
   wave: 1,
   stageIndex: 0,
   stageIntro: 3,
+  raidIntro: 0,
   bossMode: false,
   message: "SERPENT RIFT",
   messageTime: 3,
@@ -156,8 +171,37 @@ const state = {
   comboText: "",
   comboTime: 0,
   panel: null,
+  collectedFragments: [],
+  partyBarrier: 0,
   soundOn: false,
 };
+
+const introScenes = [
+  {
+    speaker: "리아",
+    side: "right",
+    portrait: "portraitGuide",
+    line: "여기가 세르펜트 리프트야. 여러 차원이 겹쳐진 던전, 그리고 돌아오지 못한 모험자들의 무덤.",
+  },
+  {
+    speaker: "카엘",
+    side: "left",
+    portrait: "portraitHero",
+    line: "세르펜트 코어를 찾으면 닫힌 차원의 문을 열 수 있어. 그러려면 계층주를 넘어야겠지.",
+  },
+  {
+    speaker: "리아",
+    side: "right",
+    portrait: "portraitGuide",
+    line: "조심해. 계층주는 보스가 아니라 그 층의 법칙이야. 숲도, 불도, 얼음도 네 적이 될 거야.",
+  },
+  {
+    speaker: "카엘",
+    side: "left",
+    portrait: "portraitHero",
+    line: "좋아. 이 던전이 법칙이라면, 내가 그 법칙을 베어버리겠어. 레이드 시작이다.",
+  },
+];
 
 const audio = {
   ctx: null,
@@ -195,6 +239,32 @@ const player = {
   movePower: 0,
   footstepTimer: 0,
   isMoving: false,
+  mounted: false,
+  mountAnim: 0,
+  mountToggleCd: 0,
+};
+
+const partyMembers = [
+  { id: "aria", name: "리아", role: "Guide Mage", type: "healer", color: "#8dfffb", x: W * 0.43, y: H * 0.76, offsetX: 48, offsetY: 56, cd: 0.6, maxCd: 1.85, range: 315, power: 0.82, action: 0, healCd: 1.2, pulse: 0 },
+  { id: "ren", name: "렌", role: "Blade Scout", type: "guard", color: "#ffd965", x: W * 0.55, y: H * 0.78, offsetX: -58, offsetY: 72, cd: 0.2, maxCd: 1.28, range: 190, power: 0.9, action: 0, healCd: 0, pulse: 0 },
+];
+
+const pet = {
+  id: "lumi",
+  name: "루미",
+  role: "Core Pet",
+  type: "pet",
+  color: "#b8ff7d",
+  x: W * 0.5,
+  y: H * 0.68,
+  offsetX: -34,
+  offsetY: 18,
+  cd: 0.3,
+  maxCd: 1.12,
+  range: 260,
+  power: 0.52,
+  action: 0,
+  pulse: 0,
 };
 
 const skills = [
@@ -220,6 +290,14 @@ const inventoryItems = [
   { name: "Rune Codex", type: "Scroll", icon: 5, power: "+Skill", rarity: "#fff2a5" },
   { name: "Mana Orb", type: "Orb", icon: 6, power: "+MP Regen", rarity: "#8aa6ff" },
   { name: "Crown Helm", type: "Helm", icon: 7, power: "+Boss DMG", rarity: "#ff9c37" },
+];
+
+const coreFragments = [
+  { id: "root", name: "뿌리의 코어 파편", boss: "SERPENT ROOT OVERLORD", color: "#7dffb0", icon: 4 },
+  { id: "obsidian", name: "흑요석 코어 파편", boss: "OBSIDIAN INFERNO TYRANT", color: "#ff8b3d", icon: 4 },
+  { id: "memory", name: "동결 기억 코어 파편", boss: "GLACIAL MEMORY EMPRESS", color: "#8dfffb", icon: 6 },
+  { id: "void", name: "공허의 코어 파편", boss: "ASTRAL ABYSS WATCHER", color: "#d66bff", icon: 2 },
+  { id: "serpent", name: "세르펜트 코어", boss: "SERPENT CORE ECLIPSE", color: "#fff2a5", icon: 7 },
 ];
 
 skills[0].icon = "*";
@@ -281,16 +359,51 @@ function currentStage() {
   return stages[state.stageIndex % stages.length];
 }
 
+function floorNumber() {
+  return Math.floor((state.wave - 1) / STAGES_PER_FLOOR) + 1;
+}
+
+function subStageNumber() {
+  return ((state.wave - 1) % STAGES_PER_FLOOR) + 1;
+}
+
+function stageCode() {
+  return `${floorNumber()}-${subStageNumber()}`;
+}
+
+function isBossStage() {
+  return subStageNumber() === STAGES_PER_FLOOR;
+}
+
+function nextQuestFragment() {
+  return coreFragments.find((fragment) => !state.collectedFragments.includes(fragment.id)) || null;
+}
+
 function syncStageForWave() {
-  const nextIndex = Math.floor((state.wave - 1) / 3) % stages.length;
+  const nextIndex = (floorNumber() - 1) % stages.length;
   if (nextIndex !== state.stageIndex) {
     state.stageIndex = nextIndex;
     state.stageIntro = 3;
-    state.message = currentStage().name.toUpperCase();
+    state.message = `${stageCode()} ${currentStage().name.toUpperCase()}`;
     state.messageTime = 2;
     state.powerFlash = Math.max(state.powerFlash, 0.55);
     state.shockwave = 1;
     state.shake = Math.max(state.shake, 8);
+  }
+}
+
+function advanceStage() {
+  state.wave += 1;
+  syncStageForWave();
+  state.stageIntro = 2.6;
+  state.nextStageKills = state.kills + KILLS_PER_STAGE;
+  enemies.length = 0;
+  hazards.length = 0;
+  if (isBossStage()) {
+    spawnBoss();
+  } else {
+    state.message = `STAGE ${stageCode()}`;
+    state.messageTime = 1.8;
   }
 }
 
@@ -438,20 +551,36 @@ function spawnEnemy(kind = "shade") {
 
 function spawnBoss() {
   state.bossMode = true;
-  const bossTitles = ["ANCIENT TREANT AWAKENS", "LAVA WARLORD AWAKENS", "FROST QUEEN AWAKENS", "VOID WATCHER AWAKENS"];
-  state.message = bossTitles[state.stageIndex % bossTitles.length];
-  state.messageTime = 2.2;
+  const stage = currentStage();
+  const floor = floorNumber();
+  const floorBonus = Math.min(0.32, (floor - 1) * 0.035);
+  const bossScale = (stage.bossScale || 1.45) + 0.72 + floorBonus;
+  const bossHp = Math.floor((2600 + state.wave * 260) * (1 + state.stageIndex * 0.16 + floorBonus));
+  state.message = `${stageCode()} RAID START - ${stage.bossTitle || stage.bossName || "FLOOR LORD"}`;
+  state.messageTime = 3;
+  state.raidIntro = 3.4;
+  state.powerFlash = Math.max(state.powerFlash, 0.75);
+  state.shockwave = 1;
+  state.shake = Math.max(state.shake, 22);
+  player.hp = player.maxHp;
+  player.mp = player.maxMp;
+  player.invuln = Math.max(player.invuln, 1.8);
   enemies.length = 0;
   enemies.push({
     kind: "boss",
+    raidLord: true,
     stageIndex: state.stageIndex,
-    x: W * 0.55,
-    y: H * 0.33,
-    r: 58,
-    hp: 720 + state.wave * 90,
-    maxHp: 720 + state.wave * 90,
-    atk: 18 + state.wave * 2,
-    speed: 28,
+    floor,
+    stageCode: stageCode(),
+    bossScale,
+    x: W * 0.54,
+    y: H * 0.31,
+    r: Math.floor(58 * bossScale),
+    hitRadius: 48,
+    hp: bossHp,
+    maxHp: bossHp,
+    atk: Math.floor((10 + state.wave * 1.15) * (1 + floorBonus)),
+    speed: Math.max(10, 18 - floorBonus * 10),
     hit: 0,
     attackAnim: 0,
     knockX: 0,
@@ -459,7 +588,7 @@ function spawnBoss() {
     walkAnim: 0,
     moving: false,
     pulse: 0,
-    pattern: 2,
+    pattern: 3.6,
   });
 }
 
@@ -583,16 +712,40 @@ function damageEnemy(enemy, amount, color = "#fff2a5", sourceX = player.x, sourc
     spawnLoot(enemy.x, enemy.y, enemy.kind);
     addParticle(enemy.x, enemy.y, enemy.kind === "boss" ? "#95ff70" : "#ffd965", enemy.kind === "boss" ? 42 : 16, 1.15);
     if (enemy.kind === "boss") {
+      spawnCoreFragmentDrop(enemy);
       state.bossMode = false;
-      state.wave += 1;
-      syncStageForWave();
-      state.message = `WAVE ${state.wave}`;
-      state.messageTime = 2;
       state.lootFlash = 2;
       player.hp = Math.min(player.maxHp, player.hp + 42);
       player.mp = player.maxMp;
+      advanceStage();
     }
   }
+}
+
+function spawnCoreFragmentDrop(enemy) {
+  const stage = stages[(enemy.stageIndex ?? state.stageIndex) % stages.length];
+  const fragment = coreFragments[(enemy.stageIndex ?? state.stageIndex) % coreFragments.length];
+  if (!fragment || state.collectedFragments.includes(fragment.id)) return;
+  lootDrops.push({
+    x: enemy.x,
+    y: enemy.y - enemy.r * 0.4,
+    vx: 0,
+    vy: -220,
+    life: 5,
+    age: 0,
+    icon: fragment.icon,
+    value: 0,
+    spin: 0,
+    scale: 1.65,
+    picked: false,
+    rarity: fragment.color || stage.enemyColor,
+    type: "coreFragment",
+    fragmentId: fragment.id,
+  });
+  state.message = "CORE FRAGMENT DROPPED";
+  state.messageTime = 2.3;
+  state.powerFlash = Math.max(state.powerFlash, 0.72);
+  state.shockwave = 1;
 }
 
 function levelUp() {
@@ -626,6 +779,98 @@ function nearestEnemy() {
 
 function enemiesInRange(x, y, radius) {
   return enemies.filter((e) => dist(x, y, e.x, e.y) <= radius);
+}
+
+function nearestEnemyFrom(x, y) {
+  let best = null;
+  let bestD = Infinity;
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const d = dist(x, y, e.x, e.y);
+    if (d < bestD) {
+      best = e;
+      bestD = d;
+    }
+  }
+  return { enemy: best, d: bestD };
+}
+
+function updateSupportUnit(unit, dt, index, isPet = false) {
+  unit.pulse += dt;
+  const angle = state.t * (isPet ? 1.8 : 0.72) + index * Math.PI * 0.82;
+  const followRadius = isPet ? 58 : 48 + index * 22;
+  const targetX = player.x + Math.cos(angle) * followRadius + (isPet ? 0 : (index === 0 ? -34 : 34));
+  const targetY = player.y + Math.sin(angle) * followRadius * 0.34 + (isPet ? -58 : 34 + index * 16);
+  unit.x += (targetX - unit.x) * Math.min(1, dt * (isPet ? 5.5 : 4.2));
+  unit.y += (targetY - unit.y) * Math.min(1, dt * (isPet ? 5.8 : 4.0));
+  unit.cd = Math.max(0, unit.cd - dt);
+  unit.action = Math.max(0, unit.action - dt);
+  if (unit.healCd) unit.healCd = Math.max(0, unit.healCd - dt);
+
+  if (unit.id === "aria" && unit.healCd <= 0 && player.hp < player.maxHp * 0.52) {
+    const heal = Math.floor(player.maxHp * 0.2 + 18);
+    player.hp = Math.min(player.maxHp, player.hp + heal);
+    unit.healCd = 6.5;
+    unit.action = 0.45;
+    hits.push({ x: player.x, y: player.y - 46, vx: 0, vy: -72, text: `+${heal}`, life: 0.95, max: 0.95, color: "#7dffb0", crit: false, spin: 0, playerHit: false });
+    hazards.push({ type: "friendlyRing", x: player.x, y: player.y, r: 20, maxR: 96, life: 0.5, color: unit.color });
+    return;
+  }
+
+  const target = nearestEnemyFrom(unit.x, unit.y);
+  if (!target.enemy || target.d > unit.range || unit.cd > 0) return;
+  unit.cd = unit.maxCd;
+  unit.action = 0.38;
+  const damage = player.atk * unit.power + rand(4, isPet ? 10 : 18);
+  if (unit.id === "ren") {
+    state.partyBarrier = Math.max(state.partyBarrier, 1.35);
+    hazards.push({ type: "friendlyRing", x: player.x, y: player.y, r: 24, maxR: 118, life: 0.42, color: unit.color });
+  }
+  damageEnemy(target.enemy, damage, unit.color, unit.x, unit.y);
+  projectiles.push({
+    type: isPet ? "petBolt" : unit.id === "ren" ? "allySlash" : "allyBolt",
+    x: unit.x,
+    y: unit.y - (isPet ? 12 : 24),
+    tx: target.enemy.x,
+    ty: target.enemy.y - target.enemy.r * 0.3,
+    life: 0.28,
+    max: 0.28,
+    color: unit.color,
+  });
+}
+
+function updateParty(dt) {
+  partyMembers.forEach((member, i) => updateSupportUnit(member, dt, i, false));
+  if (player.mounted) {
+    pet.x += (player.x - pet.x) * Math.min(1, dt * 10);
+    pet.y += (player.y - 52 - pet.y) * Math.min(1, dt * 10);
+    pet.cd = Math.max(0, pet.cd - dt);
+    pet.action = Math.max(0, pet.action - dt);
+    pet.pulse += dt;
+    const target = nearestEnemyFrom(player.x, player.y);
+    if (target.enemy && target.d <= pet.range + 50 && pet.cd <= 0) {
+      pet.cd = pet.maxCd * 0.82;
+      pet.action = 0.42;
+      damageEnemy(target.enemy, player.atk * 0.72 + rand(8, 18), pet.color, player.x, player.y - 48);
+      projectiles.push({ type: "petBolt", x: player.x, y: player.y - 72, tx: target.enemy.x, ty: target.enemy.y - target.enemy.r * 0.35, life: 0.25, max: 0.25, color: pet.color });
+    }
+    return;
+  }
+  updateSupportUnit(pet, dt, 2, true);
+}
+
+function toggleMount() {
+  if (player.hp <= 0 || player.mountToggleCd > 0) return;
+  player.mounted = !player.mounted;
+  player.mountToggleCd = 0.55;
+  player.mountAnim = 0.55;
+  player.castAnim = Math.max(player.castAnim, 0.36);
+  player.castColor = pet.color;
+  state.message = player.mounted ? "LUMI RIDING" : "DISMOUNT";
+  state.messageTime = 1.1;
+  state.powerFlash = Math.max(state.powerFlash, 0.26);
+  hazards.push({ type: "friendlyRing", x: player.x, y: player.y, r: 22, maxR: player.mounted ? 128 : 90, life: 0.48, color: pet.color });
+  addParticle(player.x, player.y - 30, pet.color, 28, 1.05);
 }
 
 function blinkTargets(originX, originY) {
@@ -801,17 +1046,21 @@ function update(dt) {
   if (projectiles.length > 80) projectiles.splice(0, projectiles.length - 80);
   state.messageTime = Math.max(0, state.messageTime - dt);
   state.stageIntro = Math.max(0, state.stageIntro - dt);
+  state.raidIntro = Math.max(0, state.raidIntro - dt);
   state.comboTime = Math.max(0, state.comboTime - dt);
   state.shake = Math.max(0, state.shake - dt * 24);
   state.lootFlash = Math.max(0, state.lootFlash - dt);
   state.powerFlash = Math.max(0, state.powerFlash - dt * 1.8);
   state.shockwave = Math.max(0, state.shockwave - dt * 2.4);
+  state.partyBarrier = Math.max(0, state.partyBarrier - dt);
   player.invuln = Math.max(0, player.invuln - dt);
   player.slashCd = Math.max(0, player.slashCd - dt);
   player.attackAnim = Math.max(0, player.attackAnim - dt);
   player.castAnim = Math.max(0, player.castAnim - dt);
   player.hurtAnim = Math.max(0, player.hurtAnim - dt);
   player.footstepTimer = Math.max(0, player.footstepTimer - dt);
+  player.mountAnim = Math.max(0, player.mountAnim - dt);
+  player.mountToggleCd = Math.max(0, player.mountToggleCd - dt);
   player.mp = Math.min(player.maxMp, player.mp + dt * 8);
 
   for (const s of skills) s.cd = Math.max(0, s.cd - dt);
@@ -828,8 +1077,9 @@ function update(dt) {
   if (moveLen > 0.05) {
     moveX /= moveLen;
     moveY /= moveLen;
-    player.x += moveX * player.speed * dt;
-    player.y += moveY * player.speed * dt;
+    const moveSpeed = player.speed * (player.mounted ? 1.38 : 1);
+    player.x += moveX * moveSpeed * dt;
+    player.y += moveY * moveSpeed * dt;
     player.targetX = player.x;
     player.targetY = player.y;
     player.facing = Math.atan2(moveY, moveX);
@@ -840,7 +1090,8 @@ function update(dt) {
     const dy = player.targetY - player.y;
     const md = Math.hypot(dx, dy);
     if (md > 2) {
-      const step = Math.min(md, player.speed * dt);
+      const moveSpeed = player.speed * (player.mounted ? 1.38 : 1);
+      const step = Math.min(md, moveSpeed * dt);
       player.x += (dx / md) * step;
       player.y += (dy / md) * step;
       player.facing = Math.atan2(dy, dx);
@@ -860,13 +1111,17 @@ function update(dt) {
   }
   player.x = clamp(player.x, 38, W - 38);
   player.y = clamp(player.y, 150, H - 135);
+  updateParty(dt);
 
   if (state.bossMode && !enemies.some((e) => e.kind === "boss")) {
     state.bossMode = false;
   }
 
-  if (!state.bossMode && state.kills >= state.nextBossKills && !enemies.some((e) => e.kind === "boss")) {
-    state.nextBossKills += BOSS_KILL_INTERVAL;
+  if (!state.bossMode && !isBossStage() && state.kills >= state.nextStageKills && !enemies.some((e) => e.kind === "boss")) {
+    advanceStage();
+  }
+
+  if (!state.bossMode && isBossStage() && !enemies.some((e) => e.kind === "boss")) {
     spawnBoss();
   }
 
@@ -891,8 +1146,8 @@ function update(dt) {
     if (e.kind === "boss") {
       e.pattern -= dt;
       if (e.pattern <= 0) {
-        e.pattern = rand(2.2, 3.5);
-        hazards.push({ type: "danger", x: player.x + rand(-26, 26), y: player.y + rand(-26, 26), r: 18, maxR: 86, life: 1.1, armed: 0.65, color: "#ff3d4f" });
+        e.pattern = rand(4.2, 6.2);
+        hazards.push({ type: "danger", x: player.x + rand(-42, 42), y: player.y + rand(-42, 42), r: 18, maxR: 72, life: 1.35, armed: 0.86, color: "#ff3d4f" });
         addParticle(e.x, e.y, "#8eff65", 10, 0.8);
       }
     }
@@ -907,13 +1162,15 @@ function update(dt) {
     if (e.moving) e.walkAnim += dt * (e.kind === "boss" ? 5.5 : 10);
     e.knockX *= Math.pow(0.035, dt);
     e.knockY *= Math.pow(0.035, dt);
-    if (d < e.r + player.r + 4 && player.invuln <= 0) {
-      player.hp -= e.atk;
+    const contactRadius = e.kind === "boss" ? e.hitRadius || 48 : e.r;
+    if (d < contactRadius + player.r + 4 && player.invuln <= 0) {
+      const taken = state.partyBarrier > 0 ? Math.ceil(e.atk * 0.48) : e.atk;
+      player.hp -= taken;
       player.invuln = 0.55;
       player.hurtAnim = 0.38;
       e.attackAnim = 0.34;
       state.shake = 5;
-      hits.push({ x: player.x, y: player.y - 24, vx: rand(-12, 12), vy: -86, text: `-${e.atk}`, life: 0.75, max: 0.75, color: "#ff7184", crit: false, spin: rand(-0.12, 0.12), playerHit: true });
+      hits.push({ x: player.x, y: player.y - 24, vx: rand(-12, 12), vy: -86, text: `-${taken}`, life: 0.75, max: 0.75, color: state.partyBarrier > 0 ? "#ffd965" : "#ff7184", crit: false, spin: rand(-0.12, 0.12), playerHit: true });
       hazards.push({ type: "impact", x: player.x, y: player.y - 4, life: 0.32, max: 0.32, color: "#ff7184", crit: false });
       addParticle(player.x, player.y, "#ff7184", 12, 0.8);
     }
@@ -1001,13 +1258,14 @@ function update(dt) {
       }
     }
     if (h.type === "danger") {
-      h.r = h.maxR * (1 - h.life / 1.1);
+      h.r = h.maxR * (1 - h.life / h.max);
       if (h.life < h.armed && !h.done) {
         h.done = true;
         addParticle(h.x, h.y, "#ff475c", 30, 1.2);
         if (dist(player.x, player.y, h.x, h.y) < h.maxR && player.invuln <= 0) {
-          player.hp -= 26 + state.wave * 2;
-          player.invuln = 0.75;
+          const baseDamage = 12 + Math.floor(state.wave * 0.8);
+          player.hp -= state.partyBarrier > 0 ? Math.ceil(baseDamage * 0.5) : baseDamage;
+          player.invuln = 1.05;
           state.shake = 7;
         }
       }
@@ -1077,7 +1335,19 @@ function update(dt) {
       loot.scale *= Math.pow(0.58, dt);
       if (dist(loot.x, loot.y, player.x, player.y - 24) < 20) {
         loot.life = 0;
-        if (loot.icon === 0) state.gold += loot.value;
+        if (loot.type === "coreFragment") {
+          const fragment = coreFragments.find((f) => f.id === loot.fragmentId);
+          if (fragment && !state.collectedFragments.includes(fragment.id)) {
+            state.collectedFragments.push(fragment.id);
+            state.comboText = "CORE FRAGMENT ACQUIRED";
+            state.comboTime = 2.2;
+            state.message = fragment.name;
+            state.messageTime = 2.4;
+            state.lootFlash = 2.2;
+            state.powerFlash = Math.max(state.powerFlash, 0.55);
+            addPrismaticBurst(player.x, player.y - 40, [fragment.color, "#ffffff", "#ffd965", "#57dfff"], 46, 1.3);
+          }
+        } else if (loot.icon === 0) state.gold += loot.value;
         else {
           state.gold += Math.floor(loot.value * 0.5);
           state.comboText = loot.icon === 3 ? "EPIC LOOT!" : "ITEM DROP!";
@@ -1218,10 +1488,11 @@ function drawBackground() {
 
 function drawEntity(e) {
   const boss = e.kind === "boss";
-  const sprite = sprites[e.kind] || sprites.shade;
   const bossStageIndex = boss ? (e.stageIndex ?? state.stageIndex) % stages.length : state.stageIndex;
-  const sheet = boss ? (sprites.bossSheets?.[bossStageIndex] || sprites.bossSheet) : e.kind === "elite" ? sprites.eliteSheet : sprites.shadeSheet;
-  const size = boss ? 172 : e.kind === "elite" ? 74 : 55;
+  const sprite = boss ? (sprites.bossSprites?.[bossStageIndex] || sprites.boss) : sprites[e.kind] || sprites.shade;
+  const sheet = boss ? null : e.kind === "elite" ? sprites.eliteSheet : sprites.shadeSheet;
+  const bossScale = boss ? (e.bossScale || 1.42) : 1;
+  const size = boss ? 172 * bossScale : e.kind === "elite" ? 74 : 55;
   const stage = boss ? stages[bossStageIndex] : currentStage();
   ctx.save();
   const bob = Math.sin(e.pulse * (boss ? 2.1 : 6.2)) * (boss ? 4 : 3);
@@ -1230,7 +1501,7 @@ function drawEntity(e) {
   const face = Math.atan2(player.y - e.y, player.x - e.x);
   ctx.translate(e.x + Math.cos(face) * lunge + hitJerk, e.y + bob + Math.sin(face) * lunge);
   ctx.globalAlpha = e.hit > 0 ? 0.82 : 1;
-  ctx.shadowBlur = boss ? 38 : 16;
+  ctx.shadowBlur = boss ? 34 + bossScale * 12 : 16;
   ctx.shadowColor = boss ? stage.enemyColor : e.kind === "elite" ? "#d66bff" : stage.enemyColor;
   const hurtSquash = e.hit > 0 ? Math.sin(e.hit * 35) * 0.12 : 0;
   const pulse = Math.sin(e.pulse * 5) * 0.05 + 1 + (e.attackAnim > 0 ? 0.08 : 0);
@@ -1249,14 +1520,14 @@ function drawEntity(e) {
     ctx.strokeStyle = boss ? stage.enemyColor : "#ff7184";
     ctx.shadowBlur = 18;
     ctx.shadowColor = ctx.strokeStyle;
-    ctx.lineWidth = boss ? 9 : 5;
+    ctx.lineWidth = boss ? 8 * bossScale : 5;
     ctx.beginPath();
-    ctx.arc(18, -4, boss ? 76 : 34, -0.75, 0.55);
+    ctx.arc(18, -4, boss ? 76 * bossScale : 34, -0.75, 0.55);
     ctx.stroke();
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = boss ? 3 : 2;
     ctx.beginPath();
-    ctx.arc(18, -4, boss ? 76 : 34, -0.55, 0.38);
+    ctx.arc(18, -4, boss ? 76 * bossScale : 34, -0.55, 0.38);
     ctx.stroke();
     ctx.restore();
   }
@@ -1275,6 +1546,25 @@ function drawEntity(e) {
     ctx.beginPath();
     ctx.ellipse(0, size * 0.02, size * 0.36, size * 0.15, -e.pulse * 0.14, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.globalAlpha = 0.12 + Math.sin(e.pulse * 2.7) * 0.04;
+    const doom = ctx.createRadialGradient(0, -size * 0.16, size * 0.18, 0, -size * 0.1, size * 0.82);
+    doom.addColorStop(0, hexAlpha(stage.enemyColor, 0.42));
+    doom.addColorStop(0.52, hexAlpha(stage.enemyColor, 0.13));
+    doom.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = doom;
+    ctx.beginPath();
+    ctx.ellipse(0, -size * 0.05, size * 0.62, size * 0.38, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.48;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i += 1) {
+      const a = e.pulse * 0.7 + i * Math.PI * 0.5;
+      ctx.strokeStyle = i % 2 ? "#ffffff" : stage.enemyColor;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * size * 0.16, -size * 0.58 + Math.sin(a) * 8);
+      ctx.lineTo(Math.cos(a) * size * 0.48, -size * 0.86 + Math.sin(a) * 18);
+      ctx.stroke();
+    }
     ctx.restore();
   }
   const stageTint = !boss && state.stageIndex > 0
@@ -1312,7 +1602,7 @@ function drawEntity(e) {
     ctx.stroke();
   }
   ctx.restore();
-  drawBar(e.x - e.r, e.y - e.r - 14, e.r * 2, 5, e.hp, e.maxHp, boss ? (stages[(e.stageIndex ?? state.stageIndex) % stages.length].enemyColor) : "#f3b75f");
+  drawBar(e.x - e.r, e.y - e.r - (boss ? 24 : 14), e.r * 2, boss ? 7 : 5, e.hp, e.maxHp, boss ? (stages[(e.stageIndex ?? state.stageIndex) % stages.length].enemyColor) : "#f3b75f");
 }
 
 function drawSpriteCutout(sprite, size, tint = null) {
@@ -1347,7 +1637,7 @@ function playerActionFrame() {
 }
 
 function drawPlayerSheetFrame(size, tint = null) {
-  const sheet = sprites.playerSheet;
+  const sheet = player.mounted ? sprites.playerRidingSheet : sprites.playerSheet;
   if (!sheet.complete || sheet.naturalWidth <= 0) {
     drawSpriteCutout(sprites.player, size * 0.82, tint);
     return;
@@ -1619,25 +1909,109 @@ function drawSwordSwing(phase) {
   ctx.restore();
 }
 
+function drawCompanion(unit) {
+  const isPet = unit.type === "pet";
+  const actionPulse = unit.action > 0 ? Math.sin((1 - unit.action / 0.45) * Math.PI) : 0;
+  ctx.save();
+  ctx.translate(unit.x, unit.y - actionPulse * 7);
+  ctx.shadowBlur = isPet ? 28 : 18;
+  ctx.shadowColor = unit.color;
+  ctx.fillStyle = "rgba(0, 0, 0, .32)";
+  ctx.beginPath();
+  ctx.ellipse(0, isPet ? 20 : 18, isPet ? 20 : 24, isPet ? 7 : 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (isPet) {
+    const bob = Math.sin(state.t * 5.2 + unit.pulse) * 4;
+    ctx.translate(0, bob);
+    ctx.globalCompositeOperation = "lighter";
+    const aura = ctx.createRadialGradient(0, 0, 2, 0, 0, 34 + actionPulse * 10);
+    aura.addColorStop(0, "#ffffff");
+    aura.addColorStop(0.35, unit.color);
+    aura.addColorStop(1, "rgba(184,255,125,0)");
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, 34 + actionPulse * 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(-15, -2, 14, 6, -0.6, 0, Math.PI * 2);
+    ctx.ellipse(15, -2, 14, 6, 0.6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(0, 0, 8 + actionPulse * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  const guard = unit.type === "guard";
+  const lean = guard ? -0.12 + actionPulse * 0.32 : 0.12 - actionPulse * 0.18;
+  ctx.rotate(lean);
+  ctx.fillStyle = hexAlpha(unit.color, 0.18);
+  ctx.beginPath();
+  ctx.ellipse(0, -9, 22, 34, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = guard ? "#322a18" : "#102c35";
+  ctx.strokeStyle = unit.color;
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(-14, -8);
+  ctx.quadraticCurveTo(0, 18, 16, -8);
+  ctx.lineTo(8, 22);
+  ctx.lineTo(-8, 22);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#ffe5c8";
+  ctx.beginPath();
+  ctx.arc(0, -26, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = guard ? "#2b1c10" : "#1f3952";
+  ctx.beginPath();
+  ctx.arc(0, -31, 11, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = guard ? "#ffffff" : unit.color;
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = unit.color;
+  ctx.lineWidth = guard ? 4 : 3;
+  ctx.beginPath();
+  if (guard) {
+    ctx.moveTo(15, -9);
+    ctx.lineTo(35 + actionPulse * 18, -29 - actionPulse * 8);
+  } else {
+    ctx.moveTo(17, -12);
+    ctx.lineTo(30, -35);
+    ctx.arc(30, -38, 5 + actionPulse * 5, 0, Math.PI * 2);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawPlayer() {
-  const size = 104;
+  const size = player.mounted ? 132 : 104;
   ctx.save();
   const moving = player.isMoving;
   const walkPower = player.movePower || 0;
   const walkFrame = Math.sin(player.stepAnim);
   const walkCross = Math.cos(player.stepAnim);
-  const walkBob = moving ? Math.abs(walkFrame) * -8.5 * walkPower : Math.sin(state.t * 4) * 1.5;
-  const sideStep = walkCross * 3.8 * walkPower;
+  const mountBounce = player.mounted ? Math.abs(walkFrame) * -5.5 * walkPower + Math.sin(state.t * 4.5) * 1.3 : 0;
+  const walkBob = player.mounted ? mountBounce : moving ? Math.abs(walkFrame) * -8.5 * walkPower : Math.sin(state.t * 4) * 1.5;
+  const sideStep = walkCross * (player.mounted ? 2.8 : 3.8) * walkPower;
   const breath = Math.sin(state.t * 4) * (1 - walkPower) * 1.2;
   const attackPhase = player.attackAnim > 0 ? clamp(1 - player.attackAnim / 0.46, 0, 1) : 0;
   const slashPush = player.attackAnim > 0 ? Math.sin(attackPhase * Math.PI) * 34 : 0;
   const castLift = player.castAnim > 0 ? Math.sin((1 - player.castAnim / 0.48) * Math.PI) * -8 : 0;
   const hurtShake = player.hurtAnim > 0 ? Math.sin(player.hurtAnim * 95) * 8 : 0;
+  const mountPop = player.mountAnim > 0 ? Math.sin((1 - player.mountAnim / 0.55) * Math.PI) * -12 : 0;
   const sideX = Math.cos(player.facing + Math.PI / 2) * sideStep;
   const sideY = Math.sin(player.facing + Math.PI / 2) * sideStep * 0.55;
   ctx.translate(
     player.x + Math.cos(player.facing) * slashPush + hurtShake + sideX,
-    player.y + walkBob + breath + castLift + Math.sin(player.facing) * slashPush + sideY,
+    player.y + walkBob + breath + castLift + mountPop + Math.sin(player.facing) * slashPush + sideY,
   );
   const blink = player.invuln > 0 && Math.floor(state.t * 18) % 2 === 0;
   ctx.globalAlpha = blink ? 0.5 : 1;
@@ -1656,12 +2030,12 @@ function drawPlayer() {
   }
   ctx.fillStyle = "rgba(0, 0, 0, .32)";
   ctx.beginPath();
-  ctx.ellipse(0, 22, 25, 9, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, player.mounted ? 28 : 22, player.mounted ? 44 : 25, player.mounted ? 12 : 9, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "rgba(255, 232, 112, .78)";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(0, 4, 30 + Math.sin(state.t * 5) * 2, 0, Math.PI * 2);
+  ctx.arc(0, player.mounted ? 9 : 4, (player.mounted ? 47 : 30) + Math.sin(state.t * 5) * 2, 0, Math.PI * 2);
   ctx.stroke();
   if (moving) {
     ctx.save();
@@ -1698,8 +2072,8 @@ function drawPlayer() {
   const attackLean = player.attackAnim > 0 ? 0.48 * Math.sin(attackPhase * Math.PI) : 0;
   const castScale = player.castAnim > 0 ? 1 + Math.sin((1 - player.castAnim / 0.48) * Math.PI) * 0.12 : 1;
   const hurtSquash = player.hurtAnim > 0 ? Math.sin(player.hurtAnim * 34) * 0.18 : 0;
-  const gaitLean = walkFrame * 0.13 * walkPower + walkCross * 0.035 * walkPower;
-  const strideStretch = Math.abs(walkFrame) * walkPower;
+  const gaitLean = player.mounted ? walkFrame * 0.055 * walkPower : walkFrame * 0.13 * walkPower + walkCross * 0.035 * walkPower;
+  const strideStretch = Math.abs(walkFrame) * walkPower * (player.mounted ? 0.55 : 1);
   ctx.rotate(gaitLean + attackLean);
   ctx.scale((1 + strideStretch * 0.055) * castScale + hurtSquash, (1 - strideStretch * 0.065) * castScale - hurtSquash * 0.35);
   const tint = player.hurtAnim > 0 ? "rgba(255, 70, 85, .45)" : player.castAnim > 0 ? "rgba(255, 236, 143, .22)" : null;
@@ -2163,6 +2537,41 @@ function drawProjectile(p) {
   ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
   ctx.shadowBlur = 24;
   ctx.shadowColor = p.color;
+  if (p.type === "allyBolt" || p.type === "petBolt" || p.type === "allySlash") {
+    const progress = clamp(1 - p.life / p.max, 0, 1);
+    const dx = (p.tx || p.x) - p.x;
+    const dy = (p.ty || p.y) - p.y;
+    const bx = dx * progress;
+    const by = dy * progress;
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = p.type === "allySlash" ? 10 : 6;
+    ctx.shadowBlur = p.type === "allySlash" ? 28 : 22;
+    ctx.beginPath();
+    if (p.type === "allySlash") {
+      ctx.moveTo(bx - dy * 0.12, by + dx * 0.12);
+      ctx.quadraticCurveTo(dx * 0.5, dy * 0.5 - 42, bx + dy * 0.12, by - dx * 0.12);
+    } else {
+      ctx.moveTo(0, 0);
+      ctx.lineTo(bx, by);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = p.type === "allySlash" ? 3 : 2;
+    const tailX = bx - dx * 0.28;
+    const tailY = by - dy * 0.28;
+    ctx.beginPath();
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(bx, by, p.type === "petBolt" ? 6 : 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
   if (p.type === "lance" || p.type === "comet" || p.type === "orb") {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
@@ -2273,7 +2682,7 @@ function drawLootDrop(loot) {
   const bob = Math.sin(state.t * 8 + loot.spin) * 3;
   ctx.translate(loot.x, loot.y + bob);
   ctx.globalAlpha = clamp(loot.life, 0, 1);
-  ctx.shadowBlur = loot.icon === 3 ? 24 : 14;
+  ctx.shadowBlur = loot.type === "coreFragment" ? 34 : loot.icon === 3 ? 24 : 14;
   ctx.shadowColor = loot.rarity;
   ctx.fillStyle = "rgba(0,0,0,.32)";
   ctx.beginPath();
@@ -2282,6 +2691,31 @@ function drawLootDrop(loot) {
   ctx.rotate(Math.sin(state.t * 5 + loot.spin) * 0.18);
   ctx.scale(loot.scale, loot.scale);
   ctx.globalCompositeOperation = "source-over";
+  if (loot.type === "coreFragment") {
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = loot.rarity;
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 3; i += 1) {
+      ctx.beginPath();
+      ctx.arc(0, -8, 30 + i * 8 + Math.sin(state.t * 5 + i) * 3, state.t * (0.8 + i * 0.2), Math.PI * 1.7 + state.t * (0.8 + i * 0.2));
+      ctx.stroke();
+    }
+    ctx.fillStyle = loot.rarity;
+    ctx.beginPath();
+    ctx.moveTo(0, -38);
+    ctx.lineTo(24, -10);
+    ctx.lineTo(10, 28);
+    ctx.lineTo(-14, 30);
+    ctx.lineTo(-25, -8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.restore();
+    return;
+  }
   if (!drawAtlas(sprites.lootIcons, loot.icon, 72, 72, -22, -28, 44, 44)) {
     ctx.fillStyle = loot.rarity;
     ctx.beginPath();
@@ -2397,7 +2831,7 @@ function drawGamePanel() {
       const col = i % 4;
       const row = Math.floor(i / 4);
       const ix = x + 42 + col * 86;
-      const iy = y + 126 + row * 118;
+      const iy = y + 112 + row * 104;
       ctx.fillStyle = "rgba(4,14,14,.7)";
       ctx.strokeStyle = item.rarity;
       ctx.lineWidth = 2;
@@ -2414,34 +2848,102 @@ function drawGamePanel() {
     });
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(141,255,251,.16)";
-    roundRect(x + 36, y + 398, w - 72, 90, 16);
+    roundRect(x + 36, y + 344, w - 72, 142, 16);
     ctx.fill();
     ctx.fillStyle = "#fff5d7";
     ctx.font = "900 16px Segoe UI";
-    ctx.fillText("Set Bonus: Astral Rift", x + 54, y + 430);
-    ctx.font = "700 13px Segoe UI";
+    ctx.fillText("Main Quest: Serpent Core", x + 54, y + 374);
+    ctx.font = "700 12px Segoe UI";
     ctx.fillStyle = "#bdfbed";
-    ctx.fillText("+35% skill damage   +18% cooldown rush   +1 overdrive burst", x + 54, y + 458);
+    ctx.fillText(`${state.collectedFragments.length}/5 core fragments collected`, x + 54, y + 396);
+    coreFragments.forEach((fragment, i) => {
+      const fx = x + 54 + i * 62;
+      const fy = y + 418;
+      const owned = state.collectedFragments.includes(fragment.id);
+      ctx.fillStyle = owned ? hexAlpha(fragment.color, 0.32) : "rgba(0,0,0,.38)";
+      ctx.strokeStyle = owned ? fragment.color : "rgba(255,255,255,.18)";
+      ctx.lineWidth = 2;
+      roundRect(fx, fy, 44, 36, 9);
+      ctx.fill();
+      ctx.stroke();
+      ctx.globalAlpha = owned ? 1 : 0.32;
+      drawAtlas(sprites.itemIcons, fragment.icon, 72, 72, fx + 8, fy + 4, 28, 28);
+      ctx.globalAlpha = 1;
+    });
   } else {
     skills.forEach((skill, i) => {
       const sx = x + 42;
-      const sy = y + 118 + i * 76;
+      const sy = y + 104 + i * 60;
       ctx.fillStyle = "rgba(4,14,14,.72)";
       ctx.strokeStyle = skill.color;
       ctx.lineWidth = 2;
-      roundRect(sx, sy, w - 84, 60, 14);
+      roundRect(sx, sy, w - 84, 50, 13);
       ctx.fill();
       ctx.stroke();
-      drawAtlas(sprites.skillIcons, i, 96, 96, sx + 10, sy + 8, 44, 44);
+      drawAtlas(sprites.skillIcons, i, 96, 96, sx + 9, sy + 7, 36, 36);
       ctx.textAlign = "left";
       ctx.fillStyle = "#fff5d7";
-      ctx.font = "900 15px Segoe UI";
-      ctx.fillText(skill.name, sx + 68, sy + 25);
+      ctx.font = "900 14px Segoe UI";
+      ctx.fillText(skill.name, sx + 58, sy + 20);
       ctx.fillStyle = "#bdfbed";
-      ctx.font = "700 12px Segoe UI";
-      ctx.fillText(`Auto cast / cooldown ${skill.maxCd.toFixed(1)}s / cost ${skill.cost}`, sx + 68, sy + 45);
-      drawBar(sx + w - 188, sy + 22, 90, 7, skill.maxCd - skill.cd, skill.maxCd, skill.color, "rgba(255,255,255,.13)");
+      ctx.font = "700 11px Segoe UI";
+      ctx.fillText(`Auto / ${skill.maxCd.toFixed(1)}s / MP ${skill.cost}`, sx + 58, sy + 38);
+      drawBar(sx + w - 188, sy + 20, 90, 7, skill.maxCd - skill.cd, skill.maxCd, skill.color, "rgba(255,255,255,.13)");
     });
+  }
+  ctx.restore();
+}
+
+function drawRaidOverlay() {
+  const boss = enemies.find((e) => e.kind === "boss");
+  if (!boss) return;
+  const bossStage = stages[(boss.stageIndex ?? state.stageIndex) % stages.length];
+  const pulse = 0.55 + Math.sin(state.t * 4.2) * 0.18;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = 0.18 + pulse * 0.12;
+  const top = ctx.createLinearGradient(0, 0, 0, H * 0.35);
+  top.addColorStop(0, hexAlpha(bossStage.enemyColor, 0.46));
+  top.addColorStop(0.54, "rgba(255,255,255,.04)");
+  top.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = top;
+  ctx.fillRect(0, 0, W, H * 0.35);
+  const bottom = ctx.createLinearGradient(0, H, 0, H * 0.62);
+  bottom.addColorStop(0, hexAlpha(bossStage.enemyColor, 0.26));
+  bottom.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = bottom;
+  ctx.fillRect(0, H * 0.62, W, H * 0.38);
+  ctx.globalCompositeOperation = "source-over";
+
+  ctx.strokeStyle = hexAlpha(bossStage.enemyColor, 0.28 + pulse * 0.18);
+  ctx.lineWidth = 3;
+  ctx.shadowBlur = 22;
+  ctx.shadowColor = bossStage.enemyColor;
+  roundRect(8, 8, W - 16, H - 16, 24);
+  ctx.stroke();
+
+  if (state.raidIntro > 0) {
+    const a = clamp(state.raidIntro / 3.4, 0, 1);
+    const y = H * 0.35 - (1 - a) * 24;
+    ctx.globalAlpha = Math.min(1, a * 1.25);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(0,0,0,.56)";
+    roundRect(26, y - 54, W - 52, 108, 18);
+    ctx.fill();
+    ctx.strokeStyle = bossStage.enemyColor;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 26;
+    ctx.shadowColor = bossStage.enemyColor;
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 18px Segoe UI";
+    ctx.fillText("SERPENT RIFT RAID", W / 2, y - 18);
+    ctx.fillStyle = bossStage.enemyColor;
+    ctx.font = "900 25px Segoe UI";
+    ctx.fillText(bossStage.bossTitle || bossStage.bossName || "계층주", W / 2, y + 15);
+    ctx.fillStyle = "#fff5d7";
+    ctx.font = "800 12px Segoe UI";
+    ctx.fillText(`${bossStage.chapter || `FLOOR ${boss.floor || 1}`} / CORE FRAGMENT`, W / 2, y + 42);
   }
   ctx.restore();
 }
@@ -2464,21 +2966,21 @@ function drawUi() {
   ctx.fill();
   ctx.fillStyle = "#fff5d7";
   ctx.font = "800 14px Segoe UI";
-  ctx.fillText(`Wave ${state.wave}`, W - 28, 39);
+  ctx.fillText(`Stage ${stageCode()}`, W - 28, 39);
   ctx.fillStyle = "#ffd965";
   ctx.fillText(`${state.gold} gold`, W - 28, 59);
-  if (!state.bossMode) {
-    const progressStart = state.nextBossKills - BOSS_KILL_INTERVAL;
-    const bossProgress = clamp((state.kills - progressStart) / BOSS_KILL_INTERVAL, 0, 1);
-    const remaining = Math.max(0, state.nextBossKills - state.kills);
+  if (!state.bossMode && !isBossStage()) {
+    const progressStart = state.nextStageKills - KILLS_PER_STAGE;
+    const stageProgress = clamp((state.kills - progressStart) / KILLS_PER_STAGE, 0, 1);
+    const remaining = Math.max(0, state.nextStageKills - state.kills);
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(2, 9, 7, .58)";
     roundRect(W - 142, 80, 128, 32, 9);
     ctx.fill();
-    drawBar(W - 130, 91, 104, 5, bossProgress, 1, currentStage().enemyColor, "rgba(255,255,255,.12)");
+    drawBar(W - 130, 91, 104, 5, stageProgress, 1, currentStage().enemyColor, "rgba(255,255,255,.12)");
     ctx.fillStyle = "#fff5d7";
     ctx.font = "800 10px Segoe UI";
-    ctx.fillText(`${remaining} TO BOSS`, W - 130, 105);
+    ctx.fillText(`${remaining} TO ${floorNumber()}-${subStageNumber() + 1}`, W - 130, 105);
   }
 
   ctx.textAlign = "center";
@@ -2490,17 +2992,53 @@ function drawUi() {
   ctx.fillText(currentStage().name, W / 2, 35);
   ctx.fillStyle = "#fff5d7";
   ctx.font = "800 10px Segoe UI";
-  ctx.fillText(`Stage ${state.stageIndex + 1} / Zone ${Math.floor((state.wave - 1) / 3) + 1}`, W / 2, 51);
+  ctx.fillText(`${currentStage().chapter || "Rift Floor"} / ${stageCode()}`, W / 2, 51);
+
+  const quest = nextQuestFragment();
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(2, 9, 7, .58)";
+  roundRect(18, 96, 176, 48, 12);
+  ctx.fill();
+  ctx.fillStyle = quest ? quest.color : "#fff2a5";
+  ctx.font = "900 10px Segoe UI";
+  ctx.fillText("MAIN QUEST", 30, 113);
+  ctx.fillStyle = "#fff5d7";
+  ctx.font = "800 10px Segoe UI";
+  ctx.fillText(quest ? `${state.collectedFragments.length}/5 코어 파편 수집` : "세르펜트 코어 완성", 30, 129);
+  ctx.fillStyle = "rgba(189,251,237,.88)";
+  ctx.fillText(quest ? `목표: ${quest.boss}` : "리프트 봉인 준비 완료", 30, 141);
 
   if (enemies.some((e) => e.kind === "boss")) {
     const boss = enemies.find((e) => e.kind === "boss");
     const bossStage = stages[(boss.stageIndex ?? state.stageIndex) % stages.length];
-    const bossNames = ["ANCIENT TREANT", "LAVA WARLORD", "FROST QUEEN", "VOID WATCHER"];
+    const phaseCount = 5;
+    const hpRatio = clamp(boss.hp / boss.maxHp, 0, 1);
     ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(0,0,0,.62)";
+    roundRect(24, 92, W - 48, 54, 14);
+    ctx.fill();
+    ctx.strokeStyle = bossStage.enemyColor;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = bossStage.enemyColor;
+    ctx.font = "900 10px Segoe UI";
+    ctx.fillText("CORE FRAGMENT RAID  /  계층주", W / 2, 107);
     ctx.fillStyle = "#fff5d7";
-    ctx.font = "800 14px Segoe UI";
-    ctx.fillText(bossNames[(boss.stageIndex ?? state.stageIndex) % bossNames.length], W / 2, 111);
-    drawBar(50, 120, W - 100, 12, boss.hp, boss.maxHp, bossStage.enemyColor, "rgba(0,0,0,.55)");
+    ctx.font = "900 15px Segoe UI";
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = bossStage.enemyColor;
+    ctx.fillText(`${boss.stageCode || stageCode()}  ${bossStage.bossName || "FLOOR BOSS"}`, W / 2, 126);
+    ctx.shadowBlur = 0;
+    drawBar(34, 134, W - 68, 12, boss.hp, boss.maxHp, bossStage.enemyColor, "rgba(0,0,0,.72)");
+    ctx.fillStyle = "rgba(255,255,255,.72)";
+    for (let i = 1; i < phaseCount; i += 1) {
+      const x = 34 + ((W - 68) * i) / phaseCount;
+      ctx.fillRect(x - 1, 134, 2, 12);
+    }
+    ctx.textAlign = "right";
+    ctx.fillStyle = hpRatio < 0.22 ? "#ff5c75" : "#fff5d7";
+    ctx.font = "900 10px Segoe UI";
+    ctx.fillText(`${Math.ceil(hpRatio * 100)}%`, W - 38, 130);
   }
 
   const baseX = W - 68;
@@ -2550,6 +3088,65 @@ function drawUi() {
     ctx.stroke();
     drawAtlas(sprites.itemIcons, b.icon, 72, 72, b.x - 15, b.y - 15, 30, 30);
   });
+
+  const mountX = W - 42;
+  const mountY = 142;
+  ctx.fillStyle = player.mounted ? "rgba(184,255,125,.32)" : "rgba(5, 15, 15, .68)";
+  ctx.strokeStyle = player.mounted ? pet.color : "rgba(184,255,125,.48)";
+  ctx.lineWidth = 2;
+  roundRect(mountX - 19, mountY - 19, 38, 38, 11);
+  ctx.fill();
+  ctx.stroke();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = pet.color;
+  ctx.shadowBlur = player.mounted ? 18 : 8;
+  ctx.shadowColor = pet.color;
+  ctx.beginPath();
+  ctx.ellipse(mountX, mountY + 3, 13, 8, -0.25, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(mountX + 8, mountY - 6, 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.shadowBlur = 0;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff5d7";
+  ctx.font = "900 9px Segoe UI";
+  ctx.fillText("R", mountX, mountY + 23);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(4, 10, 8, .62)";
+  roundRect(14, H - 146, 236, 44, 13);
+  ctx.fill();
+  ctx.fillStyle = "#fff5d7";
+  ctx.font = "900 10px Segoe UI";
+  ctx.fillText("PARTY SUPPORT", 28, H - 127);
+  [...partyMembers, pet].forEach((unit, i) => {
+    const x = 112 + i * 42;
+    const y = H - 124;
+    const readyRatio = clamp(1 - unit.cd / unit.maxCd, 0, 1);
+    ctx.fillStyle = hexAlpha(unit.color, 0.18);
+    ctx.strokeStyle = unit.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = unit.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * readyRatio);
+    ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 10px Segoe UI";
+    ctx.textAlign = "center";
+    ctx.fillText(unit.type === "pet" ? "P" : unit.type === "healer" ? "H" : "G", x, y + 4);
+  });
+  if (state.partyBarrier > 0) {
+    drawBar(28, H - 111, 68, 5, state.partyBarrier, 1.35, "#ffd965", "rgba(255,255,255,.12)");
+  }
 
   ctx.textAlign = "left";
   ctx.fillStyle = "rgba(4, 10, 8, .62)";
@@ -2607,22 +3204,27 @@ function drawUi() {
   }
   if (state.stageIntro > 0) {
     const a = clamp(state.stageIntro / 3, 0, 1);
+    const stage = currentStage();
     ctx.globalAlpha = Math.min(1, a * 1.35);
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(0,0,0,.38)";
-    roundRect(34, 214, W - 68, 86, 20);
+    roundRect(28, 204, W - 56, 126, 20);
     ctx.fill();
-    ctx.strokeStyle = currentStage().enemyColor;
+    ctx.strokeStyle = stage.enemyColor;
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.shadowBlur = 24;
-    ctx.shadowColor = currentStage().enemyColor;
+    ctx.shadowColor = stage.enemyColor;
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 25px Segoe UI";
-    ctx.fillText(currentStage().name.toUpperCase(), W / 2, 252);
-    ctx.fillStyle = currentStage().enemyColor;
+    ctx.font = "900 23px Segoe UI";
+    ctx.fillText(`${stageCode()}  ${stage.name.toUpperCase()}`, W / 2, 246);
+    ctx.fillStyle = stage.enemyColor;
     ctx.font = "800 13px Segoe UI";
-    ctx.fillText("NEW BATTLEFIELD UNLOCKED", W / 2, 278);
+    ctx.fillText(stage.chapter || "RIFT FLOOR", W / 2, 272);
+    ctx.fillStyle = "#fff5d7";
+    ctx.font = "800 11px Segoe UI";
+    const loreLines = wrapDialogue(isBossStage() ? `${stage.bossTitle}가 세르펜트 코어 파편을 지키고 있다.` : stage.lore || "세르펜트 리프트의 차원이 열렸다.", W - 86);
+    loreLines.slice(0, 2).forEach((line, i) => ctx.fillText(line, W / 2, 296 + i * 17));
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
   }
@@ -2632,6 +3234,12 @@ function drawUi() {
 
 function startGame() {
   if (state.screen !== "title") return;
+  state.screen = "intro";
+  state.introIndex = 0;
+  state.introTime = 0;
+}
+
+function beginPlay() {
   state.screen = "play";
   state.message = "ENTER THE RIFT";
   state.messageTime = 1.8;
@@ -2639,6 +3247,27 @@ function startGame() {
   state.powerFlash = 0.42;
   state.shockwave = 0.72;
   state.shake = 8;
+  state.partyBarrier = 0;
+  partyMembers.forEach((member, i) => {
+    member.x = player.x + (i === 0 ? -42 : 44);
+    member.y = player.y + 42 + i * 14;
+    member.cd = Math.min(member.cd, 0.6);
+  });
+  pet.x = player.x - 18;
+  pet.y = player.y - 52;
+  pet.cd = Math.min(pet.cd, 0.35);
+}
+
+function advanceIntro() {
+  if (state.screen !== "intro") return;
+  const scene = introScenes[Math.min(state.introIndex, introScenes.length - 1)];
+  if (state.introTime * 28 < scene.line.length) {
+    state.introTime = scene.line.length / 28;
+    return;
+  }
+  state.introIndex += 1;
+  state.introTime = 0;
+  if (state.introIndex >= introScenes.length) beginPlay();
 }
 
 function drawTitleScreen() {
@@ -2737,7 +3366,7 @@ function drawTitleScreen() {
   ctx.shadowColor = "#000000";
   ctx.font = "700 12px Georgia, serif";
   ctx.fillStyle = "rgba(235, 224, 192, .88)";
-  ctx.fillText("A DARK FANTASY RIFT SAGA", W / 2, 242);
+  ctx.fillText("ANIME DUNGEON RAID SAGA", W / 2, 242);
 
   const pulse = 0.65 + Math.sin(t * 2.4) * 0.14;
   ctx.globalCompositeOperation = "lighter";
@@ -2779,9 +3408,143 @@ function drawTitleScreen() {
   ctx.restore();
 }
 
+function wrapDialogue(text, maxWidth) {
+  const lines = [];
+  let line = "";
+  for (const ch of text) {
+    const next = line + ch;
+    if (ctx.measureText(next).width > maxWidth && line) {
+      lines.push(line);
+      line = ch;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawAnimeIntro() {
+  const scene = introScenes[Math.min(state.introIndex, introScenes.length - 1)];
+  const t = state.t;
+  const img = bg.complete ? bg : currentStage().image;
+  ctx.save();
+  if (img.complete && img.naturalWidth > 0) {
+    const scale = Math.max(W / img.width, H / img.height);
+    const bw = img.width * scale;
+    const bh = img.height * scale;
+    ctx.filter = "saturate(1.18) contrast(1.08) brightness(.72)";
+    ctx.drawImage(img, (W - bw) / 2, (H - bh) / 2, bw, bh);
+    ctx.filter = "none";
+  } else {
+    ctx.fillStyle = "#07101b";
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  const wash = ctx.createLinearGradient(0, 0, W, H);
+  wash.addColorStop(0, "rgba(58, 212, 255, .16)");
+  wash.addColorStop(0.48, "rgba(16, 20, 42, .28)");
+  wash.addColorStop(1, "rgba(255, 210, 106, .10)");
+  ctx.fillStyle = wash;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 9; i += 1) {
+    const p = (t * 0.08 + i / 9) % 1;
+    ctx.strokeStyle = `rgba(126, 230, 255, ${0.04 + (1 - p) * 0.08})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(W * p - 80, H * 0.1 + i * 82);
+    ctx.lineTo(W * p + 70, H * 0.02 + i * 82);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = "source-over";
+
+  const heroActive = scene.side === "left";
+  const heroAlpha = heroActive ? 1 : 0.48;
+  const guideAlpha = heroActive ? 0.48 : 1;
+
+  function drawPortrait(sprite, x, y, w, h, flip, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowBlur = alpha > 0.8 ? 26 : 10;
+    ctx.shadowColor = alpha > 0.8 ? "#8df2ff" : "#000000";
+    if (flip) {
+      ctx.translate(x + w, y);
+      ctx.scale(-1, 1);
+      x = 0;
+      y = 0;
+    }
+    if (sprite.complete && sprite.naturalWidth > 0) {
+      ctx.drawImage(sprite, x, y, w, h);
+    }
+    ctx.restore();
+  }
+
+  drawPortrait(sprites.portraitHero, -36, H * 0.19 + Math.sin(t * 1.8) * 3, 250, 330, false, heroAlpha);
+  drawPortrait(sprites.portraitGuide, W - 218, H * 0.18 + Math.sin(t * 1.6 + 1) * 3, 250, 330, false, guideAlpha);
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.font = "900 13px Segoe UI";
+  ctx.fillStyle = "rgba(255,255,255,.82)";
+  ctx.fillText("ANIME DUNGEON INTRO", W / 2, 42);
+  ctx.strokeStyle = "rgba(255,255,255,.24)";
+  ctx.beginPath();
+  ctx.moveTo(50, 52);
+  ctx.lineTo(W - 50, 52);
+  ctx.stroke();
+  ctx.restore();
+
+  const boxX = 22;
+  const boxY = H - 202;
+  const boxW = W - 44;
+  const boxH = 154;
+  const boxGrad = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
+  boxGrad.addColorStop(0, "rgba(255, 255, 255, .92)");
+  boxGrad.addColorStop(0.08, "rgba(230, 248, 255, .94)");
+  boxGrad.addColorStop(1, "rgba(16, 29, 54, .94)");
+  ctx.fillStyle = boxGrad;
+  roundRect(boxX, boxY, boxW, boxH, 16);
+  ctx.fill();
+  ctx.strokeStyle = scene.side === "left" ? "#68dfff" : "#ffd96b";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.75)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(boxX + 8, boxY + 8, boxW - 16, boxH - 16);
+
+  const nameX = scene.side === "left" ? boxX + 26 : boxX + boxW - 126;
+  ctx.fillStyle = scene.side === "left" ? "#1c84c7" : "#b57818";
+  roundRect(nameX, boxY - 22, 104, 34, 12);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 15px Segoe UI";
+  ctx.textAlign = "center";
+  ctx.fillText(scene.speaker, nameX + 52, boxY);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 18px Segoe UI";
+  const visible = Math.min(scene.line.length, Math.floor(state.introTime * 28));
+  const text = visible >= scene.line.length ? scene.line : scene.line.slice(0, visible);
+  const lines = wrapDialogue(text, boxW - 54);
+  lines.slice(0, 3).forEach((line, i) => ctx.fillText(line, boxX + 28, boxY + 48 + i * 30));
+
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(255,255,255,.72)";
+  ctx.font = "800 11px Segoe UI";
+  ctx.fillText("TAP / ENTER", boxX + boxW - 24, boxY + boxH - 18);
+  ctx.restore();
+}
+
 function draw() {
   if (state.screen === "title") {
     drawTitleScreen();
+    return;
+  }
+  if (state.screen === "intro") {
+    drawAnimeIntro();
     return;
   }
   ctx.save();
@@ -2807,6 +3570,7 @@ function draw() {
     ctx.fill();
   }
   enemies.sort((a, b) => a.y - b.y).forEach(drawEntity);
+  [...partyMembers, ...(player.mounted ? [] : [pet])].sort((a, b) => a.y - b.y).forEach(drawCompanion);
   drawPlayer();
   for (const p of particles) {
     ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
@@ -2863,6 +3627,7 @@ function draw() {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
   }
+  drawRaidOverlay();
   drawUi();
 }
 
@@ -2871,7 +3636,10 @@ function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
   try {
-    if (state.screen === "title") state.t += dt;
+    if (state.screen === "title" || state.screen === "intro") {
+      state.t += dt;
+      if (state.screen === "intro") state.introTime += dt;
+    }
     else if (!state.paused) update(dt);
     draw();
   } catch (err) {
@@ -2917,6 +3685,10 @@ function handlePointer(ev) {
     startGame();
     return;
   }
+  if (state.screen === "intro") {
+    advanceIntro();
+    return;
+  }
   ensureAudio();
   const p = canvasPoint(ev);
   if (state.panel) {
@@ -2930,6 +3702,12 @@ function handlePointer(ev) {
   }
   if (p.y > 70 && p.y < 116 && p.x > W - 116 && p.x < W - 20) {
     state.panel = p.x < W - 66 ? "inventory" : "skills";
+    input.down = false;
+    resetJoystick();
+    return;
+  }
+  if (p.x > W - 68 && p.x < W - 16 && p.y > 116 && p.y < 168) {
+    toggleMount();
     input.down = false;
     resetJoystick();
     return;
@@ -2971,6 +3749,10 @@ canvas.addEventListener("pointerdown", (ev) => {
     handlePointer(ev);
     return;
   }
+  if (state.screen === "intro") {
+    handlePointer(ev);
+    return;
+  }
   const leftStickZone = p.x < 170 && p.y > H - 285;
   if (leftStickZone) {
     input.joyActive = true;
@@ -2995,6 +3777,10 @@ window.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" || ev.key === " ") startGame();
     return;
   }
+  if (state.screen === "intro") {
+    if (ev.key === "Enter" || ev.key === " ") advanceIntro();
+    return;
+  }
   ensureAudio();
   if (ev.key === "1") castSkill(0);
   if (ev.key === "2") castSkill(1);
@@ -3004,6 +3790,7 @@ window.addEventListener("keydown", (ev) => {
   if (ev.key === "6") castSkill(5);
   if (ev.key === "7") castSkill(6);
   if (ev.key === "8") castSkill(7);
+  if (ev.key.toLowerCase() === "r") toggleMount();
   if (ev.key.toLowerCase() === "q") castUltimate();
   input.keys.add(ev.key.toLowerCase());
 });
