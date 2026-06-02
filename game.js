@@ -5,11 +5,9 @@ const W = canvas.width;
 const H = canvas.height;
 const STAGES_PER_FLOOR = 5;
 const KILLS_PER_STAGE = 10;
-const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+const DPR = 1;
 canvas.width = W * DPR;
 canvas.height = H * DPR;
-canvas.style.width = `${W}px`;
-canvas.style.height = `${H}px`;
 ctx.scale(DPR, DPR);
 
 const bg = new Image();
@@ -26,16 +24,23 @@ const stages = [
 const sprites = {
   player: loadImage("./assets/player.png"),
   playerSheet: loadImage("./assets/player-action-sheet.png"),
-  playerRidingSheet: loadImage("./assets/player-riding-sheet.png"),
+  playerRidingSheet: loadImage("./assets/player-riding-sheet-v2.png"),
+  lumiMount: loadImage("./assets/lumi-mount-v2.png"),
+  partnerAriaSheet: loadImage("./assets/partner-aria-sheet.png"),
+  partnerBranSheet: loadImage("./assets/partner-bran-sheet.png"),
+  partnerRenSheet: loadImage("./assets/partner-ren-sheet.png"),
   portraitHero: loadImage("./assets/portrait-hero.png"),
   portraitGuide: loadImage("./assets/portrait-guide.png"),
   titleKeyart: loadImage("./assets/title-keyart-serpent-rift.png"),
-  skillIcons: loadImage("./assets/skill-icons.png"),
+  skillIcons: loadImage("./assets/skill-icons-v2.png"),
   itemIcons: loadImage("./assets/item-icons.png"),
   uiPanel: loadImage("./assets/ui-panel.png"),
   runeEffects: loadImage("./assets/rune-effects.png"),
   lootIcons: loadImage("./assets/loot-icons.png"),
   elementFx: loadImage("./assets/element-fx.png"),
+  combatFx: loadImage("./assets/combat-fx-atlas.png"),
+  magicFx: loadImage("./assets/magic-fx-atlas-v2.png"),
+  uiFantasy: loadImage("./assets/ui-fantasy-atlas-v2.png"),
   shade: loadImage("./assets/shade.png"),
   shadeSheet: loadImage("./assets/shade-action-sheet.png"),
   elite: loadImage("./assets/elite.png"),
@@ -55,6 +60,13 @@ const sprites = {
     loadImage("./assets/boss-floorlord-4.png"),
     loadImage("./assets/boss-floorlord-5.png"),
   ],
+  floorLordSheets: [
+    loadImage("./assets/boss-floorlord-1-sheet.png"),
+    loadImage("./assets/boss-floorlord-2-sheet.png"),
+    loadImage("./assets/boss-floorlord-3-sheet.png"),
+    loadImage("./assets/boss-floorlord-4-sheet.png"),
+    loadImage("./assets/boss-floorlord-5-sheet.png"),
+  ],
 };
 
 const playerSheet = {
@@ -73,6 +85,13 @@ const playerSheet = {
 const enemySheet = {
   frameW: 128,
   frameH: 128,
+  cols: 6,
+  rows: { idle: 0, walk: 1, attack: 2, hurt: 3 },
+};
+
+const floorLordSheet = {
+  frameW: 384,
+  frameH: 384,
   cols: 6,
   rows: { idle: 0, walk: 1, attack: 2, hurt: 3 },
 };
@@ -245,14 +264,16 @@ const player = {
 };
 
 const partyMembers = [
-  { id: "aria", name: "리아", role: "Guide Mage", type: "healer", color: "#8dfffb", x: W * 0.43, y: H * 0.76, offsetX: 48, offsetY: 56, cd: 0.6, maxCd: 1.85, range: 315, power: 0.82, action: 0, healCd: 1.2, pulse: 0 },
-  { id: "ren", name: "렌", role: "Blade Scout", type: "guard", color: "#ffd965", x: W * 0.55, y: H * 0.78, offsetX: -58, offsetY: 72, cd: 0.2, maxCd: 1.28, range: 190, power: 0.9, action: 0, healCd: 0, pulse: 0 },
+  { id: "aria", name: "리아", role: "HEALER", skillName: "Sanctuary", type: "healer", color: "#8dfffb", x: W * 0.43, y: H * 0.76, offsetX: 48, offsetY: 56, cd: 0.6, maxCd: 1.85, specialCd: 2.2, maxSpecialCd: 6.6, range: 315, power: 0.82, action: 0, healCd: 1.2, pulse: 0, walkAnim: 0, moving: false, hurtAnim: 0 },
+  { id: "bran", name: "브란", role: "TANK", skillName: "Guardian Wall", type: "tank", color: "#3cffaa", x: W * 0.48, y: H * 0.8, offsetX: -64, offsetY: 66, cd: 0.35, maxCd: 1.55, specialCd: 1.1, maxSpecialCd: 5.8, range: 175, power: 0.7, action: 0, healCd: 0, pulse: 0, walkAnim: 0, moving: false, hurtAnim: 0 },
+  { id: "ren", name: "렌", role: "DPS", skillName: "Blade Rush", type: "guard", color: "#ffd965", x: W * 0.55, y: H * 0.78, offsetX: 62, offsetY: 76, cd: 0.2, maxCd: 1.28, specialCd: 1.4, maxSpecialCd: 4.8, range: 190, power: 0.9, action: 0, healCd: 0, pulse: 0, walkAnim: 0, moving: false, hurtAnim: 0 },
 ];
 
 const pet = {
   id: "lumi",
   name: "루미",
-  role: "Core Pet",
+  role: "PET",
+  skillName: "Core Burst",
   type: "pet",
   color: "#b8ff7d",
   x: W * 0.5,
@@ -261,6 +282,8 @@ const pet = {
   offsetY: 18,
   cd: 0.3,
   maxCd: 1.12,
+  specialCd: 1.8,
+  maxSpecialCd: 3.5,
   range: 260,
   power: 0.52,
   action: 0,
@@ -335,9 +358,9 @@ const input = {
   pointerY: player.y,
   joyActive: false,
   joyStartX: 82,
-  joyStartY: H - 156,
+  joyStartY: H - 232,
   joyX: 82,
-  joyY: H - 156,
+  joyY: H - 232,
   moveX: 0,
   moveY: 0,
   keys: new Set(),
@@ -373,6 +396,27 @@ function stageCode() {
 
 function isBossStage() {
   return subStageNumber() === STAGES_PER_FLOOR;
+}
+
+function bossSafeBounds(bossScale = 1) {
+  const visualR = Math.min(118, Math.max(72, 52 * bossScale));
+  return {
+    minX: visualR + 16,
+    maxX: W - visualR - 16,
+    minY: 182 + visualR * 0.25,
+    maxY: H - 214,
+  };
+}
+
+function clampBossPosition(e) {
+  if (!e || e.kind !== "boss") return;
+  const bounds = bossSafeBounds(e.bossScale || 1);
+  const beforeX = e.x;
+  const beforeY = e.y;
+  e.x = clamp(e.x, bounds.minX, bounds.maxX);
+  e.y = clamp(e.y, bounds.minY, bounds.maxY);
+  if (e.x !== beforeX) e.knockX = 0;
+  if (e.y !== beforeY) e.knockY = 0;
 }
 
 function nextQuestFragment() {
@@ -556,6 +600,7 @@ function spawnBoss() {
   const floorBonus = Math.min(0.32, (floor - 1) * 0.035);
   const bossScale = (stage.bossScale || 1.45) + 0.72 + floorBonus;
   const bossHp = Math.floor((2600 + state.wave * 260) * (1 + state.stageIndex * 0.16 + floorBonus));
+  const bounds = bossSafeBounds(bossScale);
   state.message = `${stageCode()} RAID START - ${stage.bossTitle || stage.bossName || "FLOOR LORD"}`;
   state.messageTime = 3;
   state.raidIntro = 3.4;
@@ -573,8 +618,8 @@ function spawnBoss() {
     floor,
     stageCode: stageCode(),
     bossScale,
-    x: W * 0.54,
-    y: H * 0.31,
+    x: clamp(W * 0.54, bounds.minX, bounds.maxX),
+    y: clamp(H * 0.34, bounds.minY, bounds.maxY),
     r: Math.floor(58 * bossScale),
     hitRadius: 48,
     hp: bossHp,
@@ -629,6 +674,7 @@ function addPrismaticBurst(x, y, palette, amount = 28, power = 1) {
 
 function spawnSkillAura(x, y, skillId, radius = 110, life = 0.7) {
   const palette = skillPalettes[skillId] || [currentStage().enemyColor, "#ffffff"];
+  const fxIndex = { nova: 0, lance: 5, rift: 2, storm: 4, meteor: 3, blink: 5, thunder: 1, inferno: 3 }[skillId] ?? 7;
   hazards.push({
     type: "skillAura",
     x,
@@ -637,6 +683,7 @@ function spawnSkillAura(x, y, skillId, radius = 110, life = 0.7) {
     life,
     max: life,
     palette,
+    fxIndex,
     spin: rand(-1, 1),
   });
   addPrismaticBurst(x, y, palette, 22, 0.9);
@@ -795,16 +842,122 @@ function nearestEnemyFrom(x, y) {
   return { enemy: best, d: bestD };
 }
 
+function castSupportSkill(unit, targetInfo, isPet = false) {
+  if ((unit.specialCd || 0) > 0) return false;
+  if (unit.id === "aria") {
+    const alliesNeedHelp = player.hp < player.maxHp * 0.9;
+    const nearbyEnemies = enemiesInRange(player.x, player.y, 170);
+    if (!alliesNeedHelp && nearbyEnemies.length < 3) return false;
+    const heal = Math.floor(player.maxHp * (player.hp < player.maxHp * 0.55 ? 0.18 : 0.1) + 16);
+    player.hp = Math.min(player.maxHp, player.hp + heal);
+    unit.specialCd = unit.maxSpecialCd;
+    unit.action = 0.62;
+    unit.castAnim = 0.62;
+    state.partyBarrier = Math.max(state.partyBarrier, 1.2);
+    state.comboText = "ARIA SANCTUARY";
+    state.comboTime = 0.9;
+    hits.push({ x: player.x, y: player.y - 54, vx: 0, vy: -82, text: `+${heal}`, life: 1.05, max: 1.05, color: "#7dffb0", crit: false, spin: 0, playerHit: false });
+    hazards.push({ type: "allySanctuary", x: player.x, y: player.y, life: 0.92, max: 0.92, maxR: 168, color: unit.color });
+    hazards.push({ type: "friendlyRing", x: player.x, y: player.y, r: 20, maxR: 156, life: 0.62, color: unit.color });
+    for (const e of nearbyEnemies) {
+      damageEnemy(e, player.atk * 0.72 + rand(4, 12), unit.color, unit.x, unit.y);
+    }
+    addPrismaticBurst(player.x, player.y - 28, [unit.color, "#ffffff", "#7dffb0", "#ffd965"], 28, 0.8);
+    return true;
+  }
+
+  if (unit.id === "ren") {
+    const targets = enemies
+      .filter((e) => !e.dead && dist(unit.x, unit.y, e.x, e.y) <= 320)
+      .sort((a, b) => dist(unit.x, unit.y, a.x, a.y) - dist(unit.x, unit.y, b.x, b.y))
+      .slice(0, 4);
+    if (!targets.length) return false;
+    unit.specialCd = unit.maxSpecialCd;
+    unit.action = 0.66;
+    state.partyBarrier = Math.max(state.partyBarrier, 2.1);
+    state.comboText = "REN BLADE RUSH";
+    state.comboTime = 0.9;
+    let fromX = unit.x;
+    let fromY = unit.y - 20;
+    targets.forEach((target, i) => {
+      hazards.push({ type: "blinkLine", x1: fromX, y1: fromY, x2: target.x, y2: target.y - target.r * 0.25, life: 0.36 + i * 0.04, max: 0.36 + i * 0.04, color: unit.color });
+      hazards.push({ type: "impact", x: target.x, y: target.y - target.r * 0.1, life: 0.42, max: 0.42, color: unit.color, crit: i === 0, heavy: true });
+      projectiles.push({ type: "allySlash", x: fromX, y: fromY, tx: target.x, ty: target.y - target.r * 0.3, life: 0.24 + i * 0.03, max: 0.24 + i * 0.03, color: unit.color });
+      damageEnemy(target, player.atk * 1.55 + rand(8, 20), unit.color, fromX, fromY);
+      fromX = target.x;
+      fromY = target.y - target.r * 0.3;
+    });
+    unit.x = clamp(fromX - 24, 38, W - 38);
+    unit.y = clamp(fromY + 34, 150, H - 135);
+    hazards.push({ type: "friendlyRing", x: player.x, y: player.y, r: 22, maxR: 116, life: 0.48, color: unit.color });
+    state.shake = Math.max(state.shake, 8);
+    return true;
+  }
+
+  if (unit.id === "bran") {
+    const nearbyEnemies = enemiesInRange(player.x, player.y, 210);
+    if (!nearbyEnemies.length && player.hp > player.maxHp * 0.72) return false;
+    unit.specialCd = unit.maxSpecialCd;
+    unit.action = 0.7;
+    unit.castAnim = 0.54;
+    state.partyBarrier = Math.max(state.partyBarrier, 3.2);
+    state.comboText = "BRAN GUARDIAN WALL";
+    state.comboTime = 1;
+    hazards.push({ type: "allyGuardianWall", x: player.x, y: player.y, life: 0.92, max: 0.92, maxR: 178, color: unit.color });
+    hazards.push({ type: "friendlyRing", x: player.x, y: player.y, r: 26, maxR: 174, life: 0.62, color: unit.color });
+    nearbyEnemies.forEach((e) => {
+      const dx = e.x - player.x;
+      const dy = e.y - player.y;
+      const d = Math.hypot(dx, dy) || 1;
+      e.knockX += (dx / d) * (e.kind === "boss" ? 120 : 360);
+      e.knockY += (dy / d) * (e.kind === "boss" ? 120 : 360);
+      e.attackAnim = Math.max(e.attackAnim || 0, 0.25);
+      damageEnemy(e, player.atk * 0.62 + rand(4, 10), unit.color, unit.x, unit.y);
+    });
+    hits.push({ x: player.x, y: player.y - 68, vx: 0, vy: -76, text: "GUARD", life: 0.95, max: 0.95, color: unit.color, crit: false, spin: 0, playerHit: false });
+    addPrismaticBurst(player.x, player.y - 18, [unit.color, "#ffffff", "#ffd965"], 30, 0.9);
+    state.shake = Math.max(state.shake, 7);
+    return true;
+  }
+
+  if (isPet) {
+    const target = targetInfo.enemy;
+    if (!target || targetInfo.d > unit.range + 70) return false;
+    unit.specialCd = unit.maxSpecialCd;
+    unit.action = 0.55;
+    state.comboText = player.mounted ? "MOUNT CORE BURST" : "LUMI CORE BURST";
+    state.comboTime = 0.85;
+    const cx = target.x;
+    const cy = target.y - target.r * 0.2;
+    projectiles.push({ type: "petBolt", x: unit.x, y: unit.y - 18, tx: cx, ty: cy, life: 0.24, max: 0.24, color: unit.color });
+    hazards.push({ type: "allyCoreBurst", x: cx, y: cy, life: 0.62, max: 0.62, maxR: 118, color: unit.color });
+    for (const e of enemiesInRange(cx, cy, 128)) {
+      damageEnemy(e, player.atk * 1.2 + rand(8, 18), unit.color, unit.x, unit.y);
+    }
+    addPrismaticBurst(cx, cy, [unit.color, "#ffffff", "#57dfff", "#ffd965"], 24, 0.85);
+    state.shake = Math.max(state.shake, 6);
+    return true;
+  }
+  return false;
+}
+
 function updateSupportUnit(unit, dt, index, isPet = false) {
   unit.pulse += dt;
   const angle = state.t * (isPet ? 1.8 : 0.72) + index * Math.PI * 0.82;
   const followRadius = isPet ? 58 : 48 + index * 22;
   const targetX = player.x + Math.cos(angle) * followRadius + (isPet ? 0 : (index === 0 ? -34 : 34));
   const targetY = player.y + Math.sin(angle) * followRadius * 0.34 + (isPet ? -58 : 34 + index * 16);
+  const beforeX = unit.x;
+  const beforeY = unit.y;
   unit.x += (targetX - unit.x) * Math.min(1, dt * (isPet ? 5.5 : 4.2));
   unit.y += (targetY - unit.y) * Math.min(1, dt * (isPet ? 5.8 : 4.0));
+  unit.moving = Math.hypot(unit.x - beforeX, unit.y - beforeY) > 0.18;
+  if (unit.moving) unit.walkAnim = (unit.walkAnim || 0) + dt * (isPet ? 8 : 9.5);
   unit.cd = Math.max(0, unit.cd - dt);
+  unit.specialCd = Math.max(0, (unit.specialCd || 0) - dt);
   unit.action = Math.max(0, unit.action - dt);
+  unit.castAnim = Math.max(0, (unit.castAnim || 0) - dt);
+  unit.hurtAnim = Math.max(0, (unit.hurtAnim || 0) - dt);
   if (unit.healCd) unit.healCd = Math.max(0, unit.healCd - dt);
 
   if (unit.id === "aria" && unit.healCd <= 0 && player.hp < player.maxHp * 0.52) {
@@ -812,16 +965,23 @@ function updateSupportUnit(unit, dt, index, isPet = false) {
     player.hp = Math.min(player.maxHp, player.hp + heal);
     unit.healCd = 6.5;
     unit.action = 0.45;
+    unit.castAnim = 0.48;
     hits.push({ x: player.x, y: player.y - 46, vx: 0, vy: -72, text: `+${heal}`, life: 0.95, max: 0.95, color: "#7dffb0", crit: false, spin: 0, playerHit: false });
     hazards.push({ type: "friendlyRing", x: player.x, y: player.y, r: 20, maxR: 96, life: 0.5, color: unit.color });
     return;
   }
 
   const target = nearestEnemyFrom(unit.x, unit.y);
+  if (castSupportSkill(unit, target, isPet)) return;
   if (!target.enemy || target.d > unit.range || unit.cd > 0) return;
   unit.cd = unit.maxCd;
   unit.action = 0.38;
+  unit.castAnim = unit.id === "aria" ? 0.42 : 0;
   const damage = player.atk * unit.power + rand(4, isPet ? 10 : 18);
+  if (unit.id === "bran") {
+    state.partyBarrier = Math.max(state.partyBarrier, 0.9);
+    hazards.push({ type: "allyShieldBash", x: unit.x, y: unit.y - 20, tx: target.enemy.x, ty: target.enemy.y - target.enemy.r * 0.3, life: 0.26, max: 0.26, color: unit.color });
+  }
   if (unit.id === "ren") {
     state.partyBarrier = Math.max(state.partyBarrier, 1.35);
     hazards.push({ type: "friendlyRing", x: player.x, y: player.y, r: 24, maxR: 118, life: 0.42, color: unit.color });
@@ -845,9 +1005,11 @@ function updateParty(dt) {
     pet.x += (player.x - pet.x) * Math.min(1, dt * 10);
     pet.y += (player.y - 52 - pet.y) * Math.min(1, dt * 10);
     pet.cd = Math.max(0, pet.cd - dt);
+    pet.specialCd = Math.max(0, (pet.specialCd || 0) - dt);
     pet.action = Math.max(0, pet.action - dt);
     pet.pulse += dt;
     const target = nearestEnemyFrom(player.x, player.y);
+    if (castSupportSkill(pet, target, true)) return;
     if (target.enemy && target.d <= pet.range + 50 && pet.cd <= 0) {
       pet.cd = pet.maxCd * 0.82;
       pet.action = 0.42;
@@ -1083,8 +1245,12 @@ function update(dt) {
     player.targetX = player.x;
     player.targetY = player.y;
     player.facing = Math.atan2(moveY, moveX);
-    player.stepAnim += dt * 14;
+    player.stepAnim += dt * (player.mounted ? 23 : 14);
     player.isMoving = true;
+    if (player.mounted && player.footstepTimer <= 0) {
+      player.footstepTimer = 0.075;
+      hazards.push({ type: "mountTrail", x: player.x - Math.cos(player.facing) * 38, y: player.y + 20 - Math.sin(player.facing) * 14, angle: player.facing, life: 0.42, max: 0.42, color: pet.color });
+    }
   } else {
     const dx = player.targetX - player.x;
     const dy = player.targetY - player.y;
@@ -1095,19 +1261,19 @@ function update(dt) {
       player.x += (dx / md) * step;
       player.y += (dy / md) * step;
       player.facing = Math.atan2(dy, dx);
-      player.stepAnim += dt * 12;
+      player.stepAnim += dt * (player.mounted ? 21 : 12);
       player.isMoving = true;
     }
   }
   player.movePower += ((player.isMoving ? 1 : 0) - player.movePower) * Math.min(1, dt * 12);
   if (player.isMoving && player.footstepTimer <= 0) {
-    player.footstepTimer = 0.115;
+    player.footstepTimer = player.mounted ? 0.075 : 0.115;
     const side = Math.sin(player.stepAnim) > 0 ? 1 : -1;
     const backX = player.x - Math.cos(player.facing) * 18;
     const backY = player.y - Math.sin(player.facing) * 12 + 22;
     const sideX = Math.cos(player.facing + Math.PI / 2) * side * 11;
     const sideY = Math.sin(player.facing + Math.PI / 2) * side * 7;
-    hazards.push({ type: "dust", x: backX + sideX + rand(-3, 3), y: backY + sideY + rand(-2, 2), life: 0.46, max: 0.46, color: "#d7c68b" });
+    hazards.push({ type: player.mounted ? "mountTrail" : "dust", x: backX + sideX + rand(-3, 3), y: backY + sideY + rand(-2, 2), angle: player.facing, life: player.mounted ? 0.48 : 0.46, max: player.mounted ? 0.48 : 0.46, color: player.mounted ? pet.color : "#d7c68b" });
   }
   player.x = clamp(player.x, 38, W - 38);
   player.y = clamp(player.y, 150, H - 135);
@@ -1158,6 +1324,12 @@ function update(dt) {
     const beforeY = e.y;
     e.x += (ddx / d) * e.speed * dt + e.knockX * dt;
     e.y += (ddy / d) * e.speed * dt + e.knockY * dt;
+    if (e.kind === "boss") {
+      clampBossPosition(e);
+    } else {
+      e.x = clamp(e.x, 28, W - 28);
+      e.y = clamp(e.y, 150, H - 132);
+    }
     e.moving = Math.hypot(e.x - beforeX, e.y - beforeY) > 0.25;
     if (e.moving) e.walkAnim += dt * (e.kind === "boss" ? 5.5 : 10);
     e.knockX *= Math.pow(0.035, dt);
@@ -1395,6 +1567,60 @@ function drawAtlas(img, index, frameW, frameH, x, y, w, h) {
   return true;
 }
 
+function drawUiTile(index, x, y, w, h, alpha = 1) {
+  const img = sprites.uiFantasy;
+  if (!img.complete || img.naturalWidth <= 0) return false;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  drawAtlas(img, index, 160, 160, x, y, w, h);
+  ctx.restore();
+  return true;
+}
+
+function drawUiFrame(index, x, y, w, h, alpha = 1, slice = 44) {
+  const img = sprites.uiFantasy;
+  if (!img.complete || img.naturalWidth <= 0) return false;
+  const fw = 160;
+  const fh = 160;
+  const sx = index * fw;
+  const sy = 0;
+  const s = Math.min(slice, fw / 2 - 1, fh / 2 - 1);
+  const dw = Math.min(s, w / 2);
+  const dh = Math.min(s, h / 2);
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.drawImage(img, sx, sy, s, s, x, y, dw, dh);
+  ctx.drawImage(img, sx + fw - s, sy, s, s, x + w - dw, y, dw, dh);
+  ctx.drawImage(img, sx, sy + fh - s, s, s, x, y + h - dh, dw, dh);
+  ctx.drawImage(img, sx + fw - s, sy + fh - s, s, s, x + w - dw, y + h - dh, dw, dh);
+  ctx.drawImage(img, sx + s, sy, fw - s * 2, s, x + dw, y, Math.max(0, w - dw * 2), dh);
+  ctx.drawImage(img, sx + s, sy + fh - s, fw - s * 2, s, x + dw, y + h - dh, Math.max(0, w - dw * 2), dh);
+  ctx.drawImage(img, sx, sy + s, s, fh - s * 2, x, y + dh, dw, Math.max(0, h - dh * 2));
+  ctx.drawImage(img, sx + fw - s, sy + s, s, fh - s * 2, x + w - dw, y + dh, dw, Math.max(0, h - dh * 2));
+  ctx.drawImage(img, sx + s, sy + s, fw - s * 2, fh - s * 2, x + dw, y + dh, Math.max(0, w - dw * 2), Math.max(0, h - dh * 2));
+  ctx.restore();
+  return true;
+}
+
+function drawCombatFx(index, x, y, size, rotation = 0, alpha = 1, scaleY = 1) {
+  const img = sprites.magicFx;
+  if (!img.complete || img.naturalWidth <= 0) return false;
+  const frameW = 256;
+  const frameH = 256;
+  const sx = (index % 8) * frameW + SPRITE_BLEED;
+  const sy = SPRITE_BLEED;
+  const sw = frameW - SPRITE_BLEED * 2;
+  const sh = frameH - SPRITE_BLEED * 2;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = alpha * 0.74;
+  ctx.drawImage(img, sx, sy, sw, sh, -size / 2, (-size * scaleY) / 2, size, size * scaleY);
+  ctx.restore();
+  return true;
+}
+
 function drawProceduralRune(radius, palette, alpha = 1) {
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
@@ -1490,7 +1716,7 @@ function drawEntity(e) {
   const boss = e.kind === "boss";
   const bossStageIndex = boss ? (e.stageIndex ?? state.stageIndex) % stages.length : state.stageIndex;
   const sprite = boss ? (sprites.bossSprites?.[bossStageIndex] || sprites.boss) : sprites[e.kind] || sprites.shade;
-  const sheet = boss ? null : e.kind === "elite" ? sprites.eliteSheet : sprites.shadeSheet;
+  const sheet = boss ? sprites.floorLordSheets?.[bossStageIndex] : e.kind === "elite" ? sprites.eliteSheet : sprites.shadeSheet;
   const bossScale = boss ? (e.bossScale || 1.42) : 1;
   const size = boss ? 172 * bossScale : e.kind === "elite" ? 74 : 55;
   const stage = boss ? stages[bossStageIndex] : currentStage();
@@ -1577,6 +1803,7 @@ function drawEntity(e) {
     if (e.hit > 0) action = "hurt";
     else if (e.attackAnim > 0) action = "attack";
     else if (e.moving) action = "walk";
+    const spec = boss ? floorLordSheet : enemySheet;
     const frame =
       action === "hurt"
         ? Math.min(5, Math.floor((1 - e.hit / 0.42) * 6))
@@ -1584,11 +1811,11 @@ function drawEntity(e) {
           ? Math.min(5, Math.floor((1 - e.attackAnim / 0.34) * 6))
           : action === "walk"
             ? Math.floor(e.walkAnim) % 6
-            : Math.floor(e.pulse * 3) % 6;
-    const sx = frame * enemySheet.frameW + SPRITE_BLEED;
-    const sy = enemySheet.rows[action] * enemySheet.frameH + SPRITE_BLEED;
-    const sw = enemySheet.frameW - SPRITE_BLEED * 2;
-    const sh = enemySheet.frameH - SPRITE_BLEED * 2;
+            : Math.floor(e.pulse * (boss ? 2.4 : 3)) % 6;
+    const sx = frame * spec.frameW + SPRITE_BLEED;
+    const sy = spec.rows[action] * spec.frameH + SPRITE_BLEED;
+    const sw = spec.frameW - SPRITE_BLEED * 2;
+    const sh = spec.frameH - SPRITE_BLEED * 2;
     drawSheetFrameTinted(sheet, sx, sy, sw, sh, -size / 2, -size * 0.72, size, size, tints);
   } else if (sprite.complete && sprite.naturalWidth > 0) {
     drawSpriteTinted(sprite, -size / 2, -size * 0.72, size, size, tints);
@@ -1909,6 +2136,36 @@ function drawSwordSwing(phase) {
   ctx.restore();
 }
 
+function companionActionFrame(unit) {
+  if (unit.hurtAnim > 0) {
+    return { action: "hurt", frame: Math.min(5, Math.floor((1 - unit.hurtAnim / 0.38) * 6)) };
+  }
+  if (unit.action > 0 && unit.id === "ren") {
+    return { action: "attack", frame: Math.min(5, Math.floor((1 - unit.action / 0.38) * 6)) };
+  }
+  if ((unit.castAnim || 0) > 0 || (unit.action > 0 && unit.id === "aria")) {
+    const span = unit.castAnim > 0 ? 0.48 : 0.38;
+    const left = unit.castAnim > 0 ? unit.castAnim : unit.action;
+    return { action: "cast", frame: Math.min(5, Math.floor((1 - left / span) * 6)) };
+  }
+  if (unit.moving) {
+    return { action: "walk", frame: Math.floor(unit.walkAnim || 0) % 6 };
+  }
+  return { action: "idle", frame: Math.floor((state.t + unit.pulse * 0.2) * 4) % 6 };
+}
+
+function drawCompanionSheetFrame(unit, size) {
+  const sheet = unit.id === "aria" ? sprites.partnerAriaSheet : unit.id === "bran" ? sprites.partnerBranSheet : sprites.partnerRenSheet;
+  if (!sheet.complete || sheet.naturalWidth <= 0) return false;
+  const anim = companionActionFrame(unit);
+  const sx = anim.frame * playerSheet.frameW + SPRITE_BLEED;
+  const sy = playerSheet.rows[anim.action] * playerSheet.frameH + SPRITE_BLEED;
+  const sw = playerSheet.frameW - SPRITE_BLEED * 2;
+  const sh = playerSheet.frameH - SPRITE_BLEED * 2;
+  ctx.drawImage(sheet, sx, sy, sw, sh, -size / 2, -size * 0.78, size, size);
+  return true;
+}
+
 function drawCompanion(unit) {
   const isPet = unit.type === "pet";
   const actionPulse = unit.action > 0 ? Math.sin((1 - unit.action / 0.45) * Math.PI) : 0;
@@ -1924,25 +2181,59 @@ function drawCompanion(unit) {
   if (isPet) {
     const bob = Math.sin(state.t * 5.2 + unit.pulse) * 4;
     ctx.translate(0, bob);
-    ctx.globalCompositeOperation = "lighter";
-    const aura = ctx.createRadialGradient(0, 0, 2, 0, 0, 34 + actionPulse * 10);
-    aura.addColorStop(0, "#ffffff");
-    aura.addColorStop(0.35, unit.color);
-    aura.addColorStop(1, "rgba(184,255,125,0)");
-    ctx.fillStyle = aura;
-    ctx.beginPath();
-    ctx.arc(0, 0, 34 + actionPulse * 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(-15, -2, 14, 6, -0.6, 0, Math.PI * 2);
-    ctx.ellipse(15, -2, 14, 6, 0.6, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.arc(0, 0, 8 + actionPulse * 3, 0, Math.PI * 2);
-    ctx.fill();
+    if (sprites.lumiMount.complete && sprites.lumiMount.naturalWidth > 0) {
+      const w = 88 + actionPulse * 12;
+      const h = w * (sprites.lumiMount.naturalHeight / sprites.lumiMount.naturalWidth);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.42;
+      ctx.filter = "blur(4px)";
+      ctx.drawImage(sprites.lumiMount, -w * 0.5 - 2, -h * 0.62 - 1, w + 4, h + 4);
+      ctx.filter = "none";
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.drawImage(sprites.lumiMount, -w * 0.5, -h * 0.62, w, h);
+    } else {
+      ctx.globalCompositeOperation = "lighter";
+      const aura = ctx.createRadialGradient(0, 0, 2, 0, 0, 34 + actionPulse * 10);
+      aura.addColorStop(0, "#ffffff");
+      aura.addColorStop(0.35, unit.color);
+      aura.addColorStop(1, "rgba(184,255,125,0)");
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(0, 0, 34 + actionPulse * 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(0, 0, 8 + actionPulse * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    return;
+  }
+
+  const partnerSize = 128;
+  if (drawCompanionSheetFrame(unit, partnerSize)) {
+    if (actionPulse > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = actionPulse * 0.75;
+      ctx.strokeStyle = unit.color;
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = unit.color;
+      ctx.lineWidth = unit.id === "ren" ? 5 : 3;
+      ctx.beginPath();
+      if (unit.id === "ren") {
+        ctx.arc(8, -22, 52, -0.85, 0.4);
+      } else if (unit.id === "bran") {
+        ctx.arc(0, -20, 54, Math.PI * 0.7, Math.PI * 1.8);
+        ctx.moveTo(-34, -64);
+        ctx.lineTo(-34, 18);
+      } else {
+        ctx.ellipse(0, 9, 44, 16, 0, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
     ctx.restore();
     return;
   }
@@ -1992,7 +2283,7 @@ function drawCompanion(unit) {
 }
 
 function drawPlayer() {
-  const size = player.mounted ? 132 : 104;
+  const size = player.mounted ? 148 : 104;
   ctx.save();
   const moving = player.isMoving;
   const walkPower = player.movePower || 0;
@@ -2103,6 +2394,109 @@ function drawHazard(h) {
     drawProceduralRune(92, [h.color, "#ffffff", "#ffd965"], clamp(h.life / 0.42, 0, 1) * 0.52);
     ctx.restore();
   }
+  if (h.type === "allySanctuary") {
+    const p = 1 - h.life / h.max;
+    const a = clamp(h.life / h.max, 0, 1);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = a * 0.36;
+    const g = ctx.createRadialGradient(h.x, h.y, 8, h.x, h.y, h.maxR);
+    g.addColorStop(0, "rgba(255,255,255,.18)");
+    g.addColorStop(0.32, hexAlpha(h.color, 0.24));
+    g.addColorStop(0.72, "rgba(125,255,176,.08)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(h.x, h.y, h.maxR * (0.55 + p * 0.35), h.maxR * (0.22 + p * 0.2), 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawCombatFx(0, h.x, h.y - 48, h.maxR * (1.34 + p * 0.32), Math.sin(state.t * 0.8) * 0.04, a * 0.95, 1);
+    ctx.translate(h.x, h.y);
+    ctx.rotate(state.t * 1.3);
+    drawProceduralRune(h.maxR * 0.78, [h.color, "#ffffff", "#7dffb0", "#ffd965"], a * 0.58);
+    ctx.restore();
+  }
+  if (h.type === "allyCoreBurst") {
+    const p = 1 - h.life / h.max;
+    const a = clamp(h.life / h.max, 0, 1);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = a * 0.42;
+    ctx.shadowBlur = 34;
+    ctx.shadowColor = h.color;
+    const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.maxR * (0.45 + p));
+    g.addColorStop(0, "rgba(255,255,255,.34)");
+    g.addColorStop(0.2, hexAlpha(h.color, 0.32));
+    g.addColorStop(0.58, "rgba(87,223,255,.1)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, h.maxR * (0.35 + p * 0.75), 0, Math.PI * 2);
+    ctx.fill();
+    drawCombatFx(7, h.x, h.y - 8, h.maxR * (1.75 + p * 0.55), state.t * 0.22, a * 0.98, 1);
+    strokeMultiArc(h.x, h.y, h.maxR * (0.42 + p * 0.55), state.t * 3, Math.PI * 1.75 + state.t * 3, [h.color, "#ffffff", "#57dfff", "#ffd965"], 8, a);
+    ctx.restore();
+  }
+  if (h.type === "allyGuardianWall") {
+    const p = 1 - h.life / h.max;
+    const a = clamp(h.life / h.max, 0, 1);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = a * 0.42;
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = h.color;
+    const g = ctx.createRadialGradient(h.x, h.y, 12, h.x, h.y, h.maxR);
+    g.addColorStop(0, "rgba(255,255,255,.12)");
+    g.addColorStop(0.34, hexAlpha(h.color, 0.22));
+    g.addColorStop(0.78, "rgba(255,217,101,.06)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, h.maxR * (0.48 + p * 0.5), 0, Math.PI * 2);
+    ctx.fill();
+    drawCombatFx(6, h.x, h.y - 50, h.maxR * 1.28, 0, a * 0.62, 0.9);
+    ctx.strokeStyle = h.color;
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, h.maxR * (0.4 + p * 0.46), Math.PI * 0.62, Math.PI * 1.38);
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 5; i += 1) {
+      const sx = h.x - 70 + i * 35;
+      ctx.beginPath();
+      ctx.moveTo(sx, h.y - 66 + p * 12);
+      ctx.lineTo(sx + 8, h.y + 44 - p * 8);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (h.type === "allyShieldBash") {
+    const p = 1 - h.life / h.max;
+    const a = clamp(h.life / h.max, 0, 1);
+    const x = h.x + (h.tx - h.x) * p;
+    const y = h.y + (h.ty - h.y) * p;
+    const angle = Math.atan2(h.ty - h.y, h.tx - h.x);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = a;
+    ctx.shadowBlur = 24;
+    ctx.shadowColor = h.color;
+    ctx.strokeStyle = h.color;
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(0, 0, 26 + p * 18, Math.PI * 0.65, Math.PI * 1.35);
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-20, -18);
+    ctx.lineTo(20, 0);
+    ctx.lineTo(-20, 18);
+    ctx.stroke();
+    ctx.restore();
+  }
   if (h.type === "skillAura") {
     const p = 1 - h.life / h.max;
     const a = clamp(h.life / h.max, 0, 1);
@@ -2112,22 +2506,23 @@ function drawHazard(h) {
     const radius = h.radius * (0.55 + p * 0.55);
     ctx.translate(h.x, h.y);
     ctx.globalCompositeOperation = "lighter";
+    drawCombatFx(h.fxIndex ?? 7, 0, -8, radius * 2.2, state.t * 0.12, a * 0.74, 1);
 
-    ctx.globalAlpha = a * 0.6;
+    ctx.globalAlpha = a * 0.28;
     const gOuter = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 1.45);
-    gOuter.addColorStop(0, hexAlpha(accent, 0.9));
-    gOuter.addColorStop(0.3, hexAlpha(main, 0.7));
-    gOuter.addColorStop(0.7, hexAlpha(deep, 0.25));
+    gOuter.addColorStop(0, hexAlpha(accent, 0.42));
+    gOuter.addColorStop(0.3, hexAlpha(main, 0.32));
+    gOuter.addColorStop(0.7, hexAlpha(deep, 0.12));
     gOuter.addColorStop(1, hexAlpha(main, 0));
     ctx.fillStyle = gOuter;
     ctx.beginPath();
     ctx.ellipse(0, 0, radius * 1.45, radius * 0.98, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.globalAlpha = a;
+    ctx.globalAlpha = a * 0.42;
     const gCore = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.55);
-    gCore.addColorStop(0, "rgba(255,255,255,1)");
-    gCore.addColorStop(0.4, hexAlpha(accent, 0.85));
+    gCore.addColorStop(0, "rgba(255,255,255,.42)");
+    gCore.addColorStop(0.4, hexAlpha(accent, 0.36));
     gCore.addColorStop(1, hexAlpha(main, 0));
     ctx.fillStyle = gCore;
     ctx.beginPath();
@@ -2137,7 +2532,7 @@ function drawHazard(h) {
     ctx.save();
     ctx.rotate(state.t * (1.4 + h.spin));
     ctx.fillStyle = hexAlpha(accent, 0.55);
-    ctx.globalAlpha = a * 0.7;
+    ctx.globalAlpha = a * 0.28;
     const rayCount = 6;
     const rayInner = radius * 0.3;
     for (let i = 0; i < rayCount; i += 1) {
@@ -2156,7 +2551,7 @@ function drawHazard(h) {
     }
     ctx.restore();
 
-    ctx.globalAlpha = a * 0.95;
+    ctx.globalAlpha = a * 0.5;
     ctx.fillStyle = hexAlpha(accent, 0.95);
     const sparkCount = 6;
     for (let i = 0; i < sparkCount; i += 1) {
@@ -2189,6 +2584,7 @@ function drawHazard(h) {
   if (h.type === "rift") {
     ctx.globalAlpha = clamp(h.life, 0, 1) * 0.7;
     const palette = effectPalette("rift", h.color);
+    drawCombatFx(2, h.x, h.y, h.maxR * 2.25, -state.t * 0.18, clamp(h.life, 0, 1) * 0.86, 1);
     const g = ctx.createRadialGradient(h.x, h.y, 4, h.x, h.y, h.maxR);
     g.addColorStop(0, "rgba(255,255,255,.38)");
     g.addColorStop(0.35, "rgba(255,125,242,.24)");
@@ -2210,6 +2606,7 @@ function drawHazard(h) {
     const palette = effectPalette("storm", h.color);
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.85;
+    drawCombatFx(4, h.x, h.y - 48, 248 + p * 58, state.t * 0.18, clamp(h.life / h.max, 0, 1) * 0.78, 1);
     ctx.translate(h.x, h.y);
     ctx.rotate(state.t * 3.4);
     ctx.shadowBlur = 32;
@@ -2288,6 +2685,7 @@ function drawHazard(h) {
     ctx.translate(h.tx, h.ty);
     ctx.rotate(angle);
     ctx.globalCompositeOperation = "lighter";
+    drawCombatFx(5, 0, -8, 148 + p * 44, -0.22, a * 0.88, 0.82);
     ctx.save();
     ctx.globalAlpha = a * 0.42;
     ctx.filter = "blur(4px)";
@@ -2329,6 +2727,32 @@ function drawHazard(h) {
     ctx.beginPath();
     ctx.ellipse(h.x, h.y, r, r * 0.36, 0, 0, Math.PI * 2);
     ctx.fill();
+  }
+  if (h.type === "mountTrail") {
+    const p = 1 - h.life / h.max;
+    const a = clamp(h.life / h.max, 0, 1);
+    ctx.save();
+    ctx.translate(h.x, h.y);
+    ctx.rotate(h.angle || 0);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = a * 0.72;
+    ctx.shadowBlur = 22;
+    ctx.shadowColor = h.color;
+    ctx.strokeStyle = h.color;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 4; i += 1) {
+      ctx.lineWidth = 7 - i;
+      ctx.beginPath();
+      ctx.moveTo(-48 - p * 22 - i * 7, 10 + i * 5);
+      ctx.quadraticCurveTo(-24 - p * 16, -4 + i * 2, 8 - p * 6, 6 - i * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#ffffff";
+    ctx.globalAlpha = a * 0.5;
+    ctx.beginPath();
+    ctx.ellipse(-20 - p * 20, 12, 28 + p * 22, 8 + p * 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
   if (h.type === "impact") {
     const p = 1 - h.life / h.max;
@@ -2442,6 +2866,7 @@ function drawHazard(h) {
       ctx.globalAlpha = a;
       ctx.shadowBlur = 34;
       ctx.shadowColor = palette[1];
+      drawCombatFx(1, h.x, h.y - 86, 230, 0, a * 0.78, 1.15);
       if (sprites.elementFx.complete) {
         ctx.drawImage(sprites.elementFx, 0, 0, 256, 256, h.x - 42, h.y - 220, 84, 240);
       }
@@ -2467,11 +2892,12 @@ function drawHazard(h) {
     const p = 1 - h.life / h.max;
     const palette = effectPalette("thunderStorm", h.color);
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.45;
+    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.22;
+    drawCombatFx(1, W / 2, H * 0.43, 560 + p * 130, 0, clamp(h.life / h.max, 0, 1) * 0.72, 1);
     const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, "rgba(115,245,255,.12)");
-    bg.addColorStop(0.5, "rgba(41,125,255,.10)");
-    bg.addColorStop(1, "rgba(255,242,110,.08)");
+    bg.addColorStop(0, "rgba(115,245,255,.05)");
+    bg.addColorStop(0.5, "rgba(41,125,255,.04)");
+    bg.addColorStop(1, "rgba(255,242,110,.03)");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
     ctx.lineWidth = 3;
@@ -2494,6 +2920,7 @@ function drawHazard(h) {
       ctx.globalAlpha = a;
       ctx.shadowBlur = 38;
       ctx.shadowColor = palette[0];
+      drawCombatFx(3, h.x, h.y - 42 * scale, 185 * scale, state.t * 0.08, a * 0.74, 1.1);
       if (sprites.elementFx.complete) {
         ctx.drawImage(sprites.elementFx, 256, 0, 256, 256, h.x - 62 * scale, h.y - 140 * scale, 124 * scale, 170 * scale);
       }
@@ -2510,11 +2937,12 @@ function drawHazard(h) {
     const p = 1 - h.life / h.max;
     const palette = effectPalette("infernoField", h.color);
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.48;
+    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.22;
+    drawCombatFx(3, h.x, h.y - 40, 470 + p * 135, state.t * 0.12, clamp(h.life / h.max, 0, 1) * 0.62, 1);
     const bg = ctx.createRadialGradient(h.x, h.y, 10, h.x, h.y, 360);
-    bg.addColorStop(0, "rgba(255,255,255,.18)");
-    bg.addColorStop(0.3, "rgba(255,90,46,.22)");
-    bg.addColorStop(0.58, "rgba(255,212,90,.12)");
+    bg.addColorStop(0, "rgba(255,255,255,.08)");
+    bg.addColorStop(0.3, "rgba(255,90,46,.08)");
+    bg.addColorStop(0.58, "rgba(255,212,90,.05)");
     bg.addColorStop(1, "rgba(167,0,40,0)");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
@@ -2548,6 +2976,9 @@ function drawProjectile(p) {
     ctx.strokeStyle = p.color;
     ctx.lineWidth = p.type === "allySlash" ? 10 : 6;
     ctx.shadowBlur = p.type === "allySlash" ? 28 : 22;
+    if (p.type === "allySlash") {
+      drawCombatFx(5, bx, by, 112, Math.atan2(dy, dx) - 0.28, clamp(p.life / p.max, 0, 1) * 0.74, 0.72);
+    }
     ctx.beginPath();
     if (p.type === "allySlash") {
       ctx.moveTo(bx - dy * 0.12, by + dx * 0.12);
@@ -2802,7 +3233,11 @@ function drawGamePanel() {
   const y = 150;
   const w = W - 56;
   const h = 560;
-  if (sprites.uiPanel.complete) {
+  if (drawUiFrame(0, x, y, w, h, 0.98, 48)) {
+    ctx.fillStyle = "rgba(0, 6, 8, .28)";
+    roundRect(x + 18, y + 22, w - 36, h - 44, 18);
+    ctx.fill();
+  } else if (sprites.uiPanel.complete) {
     ctx.drawImage(sprites.uiPanel, x, y, w, h);
   } else {
     ctx.fillStyle = "rgba(5,14,14,.92)";
@@ -2819,9 +3254,7 @@ function drawGamePanel() {
   ctx.fillText(state.panel === "inventory" ? "Legend gear loadout" : "Auto battle rotation", x + 36, y + 76);
 
   ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(255,255,255,.16)";
-  roundRect(x + w - 54, y + 28, 30, 30, 8);
-  ctx.fill();
+  drawUiTile(8, x + w - 60, y + 22, 42, 42, 0.9);
   ctx.fillStyle = "#fff5d7";
   ctx.font = "900 18px Segoe UI";
   ctx.fillText("X", x + w - 39, y + 50);
@@ -2832,11 +3265,10 @@ function drawGamePanel() {
       const row = Math.floor(i / 4);
       const ix = x + 42 + col * 86;
       const iy = y + 112 + row * 104;
-      ctx.fillStyle = "rgba(4,14,14,.7)";
+      drawUiFrame(3, ix - 5, iy - 5, 80, 80, 0.96, 34);
       ctx.strokeStyle = item.rarity;
-      ctx.lineWidth = 2;
-      roundRect(ix, iy, 70, 70, 12);
-      ctx.fill();
+      ctx.lineWidth = 1.5;
+      roundRect(ix + 2, iy + 2, 66, 66, 10);
       ctx.stroke();
       drawAtlas(sprites.itemIcons, item.icon, 72, 72, ix + 7, iy + 7, 56, 56);
       ctx.textAlign = "center";
@@ -2847,9 +3279,7 @@ function drawGamePanel() {
       ctx.fillText(item.power, ix + 35, iy + 104);
     });
     ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(141,255,251,.16)";
-    roundRect(x + 36, y + 344, w - 72, 142, 16);
-    ctx.fill();
+    drawUiFrame(6, x + 30, y + 336, w - 60, 154, 0.9, 42);
     ctx.fillStyle = "#fff5d7";
     ctx.font = "900 16px Segoe UI";
     ctx.fillText("Main Quest: Serpent Core", x + 54, y + 374);
@@ -2874,21 +3304,49 @@ function drawGamePanel() {
     skills.forEach((skill, i) => {
       const sx = x + 42;
       const sy = y + 104 + i * 60;
-      ctx.fillStyle = "rgba(4,14,14,.72)";
-      ctx.strokeStyle = skill.color;
-      ctx.lineWidth = 2;
-      roundRect(sx, sy, w - 84, 50, 13);
+      const ready = skill.cd <= 0 && player.mp >= skill.cost;
+      drawUiFrame(7, sx - 5, sy - 5, w - 74, 60, ready ? 0.72 : 0.5, 34);
+      const rowGrad = ctx.createLinearGradient(sx, sy, sx + w - 84, sy + 50);
+      rowGrad.addColorStop(0, ready ? hexAlpha(skill.color, 0.24) : "rgba(4,14,14,.78)");
+      rowGrad.addColorStop(0.45, "rgba(3,10,13,.84)");
+      rowGrad.addColorStop(1, ready ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.2)");
+      ctx.fillStyle = rowGrad;
+      ctx.strokeStyle = ready ? skill.color : "rgba(255,255,255,.16)";
+      ctx.lineWidth = ready ? 2 : 1.5;
+      ctx.shadowBlur = ready ? 16 : 0;
+      ctx.shadowColor = skill.color;
+      roundRect(sx, sy, w - 84, 50, 12);
       ctx.fill();
       ctx.stroke();
-      drawAtlas(sprites.skillIcons, i, 96, 96, sx + 9, sy + 7, 36, 36);
+      ctx.shadowBlur = 0;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = ready ? 0.28 : 0.1;
+      ctx.fillStyle = skill.color;
+      ctx.beginPath();
+      ctx.arc(sx + 29, sy + 25, 25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = "rgba(0,0,0,.45)";
+      ctx.strokeStyle = ready ? "#fff5d7" : "rgba(255,255,255,.24)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(sx + 29, sy + 25, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      drawAtlas(sprites.skillIcons, i, 96, 96, sx + 5, sy + 1, 48, 48);
       ctx.textAlign = "left";
       ctx.fillStyle = "#fff5d7";
-      ctx.font = "900 14px Segoe UI";
-      ctx.fillText(skill.name, sx + 58, sy + 20);
+      ctx.font = "900 13px Segoe UI";
+      ctx.fillText(skill.name, sx + 64, sy + 19);
       ctx.fillStyle = "#bdfbed";
-      ctx.font = "700 11px Segoe UI";
-      ctx.fillText(`Auto / ${skill.maxCd.toFixed(1)}s / MP ${skill.cost}`, sx + 58, sy + 38);
-      drawBar(sx + w - 188, sy + 20, 90, 7, skill.maxCd - skill.cd, skill.maxCd, skill.color, "rgba(255,255,255,.13)");
+      ctx.font = "800 10px Segoe UI";
+      ctx.fillText(`AUTO  /  ${skill.maxCd.toFixed(1)}s  /  MP ${skill.cost}`, sx + 64, sy + 36);
+      drawBar(sx + w - 186, sy + 18, 88, 7, skill.maxCd - skill.cd, skill.maxCd, skill.color, "rgba(255,255,255,.13)");
+      ctx.textAlign = "right";
+      ctx.fillStyle = ready ? skill.color : "rgba(255,255,255,.4)";
+      ctx.font = "900 9px Segoe UI";
+      ctx.fillText(ready ? "READY" : `${Math.ceil(Math.max(0, skill.cd))}s`, sx + w - 94, sy + 39);
     });
   }
   ctx.restore();
@@ -2950,9 +3408,11 @@ function drawRaidOverlay() {
 
 function drawUi() {
   ctx.save();
-  ctx.fillStyle = "rgba(2, 9, 7, .58)";
-  roundRect(14, 15, 216, 72, 14);
-  ctx.fill();
+  if (!drawUiFrame(1, 10, 10, 224, 82, 0.92, 38)) {
+    ctx.fillStyle = "rgba(2, 9, 7, .58)";
+    roundRect(14, 15, 216, 72, 14);
+    ctx.fill();
+  }
   ctx.fillStyle = "#fff5d7";
   ctx.font = "800 17px Segoe UI";
   ctx.fillText(`Lv.${player.level} Rift Knight`, 28, 39);
@@ -2961,9 +3421,11 @@ function drawUi() {
   drawBar(28, 79, 170, 5, player.exp, player.nextExp, "#ffd965", "rgba(255,255,255,.14)");
 
   ctx.textAlign = "right";
-  ctx.fillStyle = "rgba(2, 9, 7, .58)";
-  roundRect(W - 142, 16, 128, 58, 13);
-  ctx.fill();
+  if (!drawUiFrame(1, W - 150, 10, 140, 70, 0.88, 34)) {
+    ctx.fillStyle = "rgba(2, 9, 7, .58)";
+    roundRect(W - 142, 16, 128, 58, 13);
+    ctx.fill();
+  }
   ctx.fillStyle = "#fff5d7";
   ctx.font = "800 14px Segoe UI";
   ctx.fillText(`Stage ${stageCode()}`, W - 28, 39);
@@ -2974,49 +3436,39 @@ function drawUi() {
     const stageProgress = clamp((state.kills - progressStart) / KILLS_PER_STAGE, 0, 1);
     const remaining = Math.max(0, state.nextStageKills - state.kills);
     ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(2, 9, 7, .58)";
-    roundRect(W - 142, 80, 128, 32, 9);
-    ctx.fill();
-    drawBar(W - 130, 91, 104, 5, stageProgress, 1, currentStage().enemyColor, "rgba(255,255,255,.12)");
+    drawUiFrame(13, W - 145, 82, 134, 38, 0.55, 28);
+    drawBar(W - 130, 96, 104, 5, stageProgress, 1, currentStage().enemyColor, "rgba(255,255,255,.12)");
     ctx.fillStyle = "#fff5d7";
     ctx.font = "800 10px Segoe UI";
-    ctx.fillText(`${remaining} TO ${floorNumber()}-${subStageNumber() + 1}`, W - 130, 105);
+    ctx.fillText(`${remaining} TO ${floorNumber()}-${subStageNumber() + 1}`, W - 130, 110);
   }
 
-  ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(2, 9, 7, .58)";
-  roundRect(W / 2 - 86, 18, 172, 42, 12);
-  ctx.fill();
-  ctx.fillStyle = currentStage().enemyColor;
-  ctx.font = "900 12px Segoe UI";
-  ctx.fillText(currentStage().name, W / 2, 35);
-  ctx.fillStyle = "#fff5d7";
-  ctx.font = "800 10px Segoe UI";
-  ctx.fillText(`${currentStage().chapter || "Rift Floor"} / ${stageCode()}`, W / 2, 51);
+  const activeBoss = enemies.some((e) => e.kind === "boss");
+  if (!activeBoss) {
+    const quest = nextQuestFragment();
+    ctx.textAlign = "left";
+    drawUiFrame(6, 13, 102, 188, 60, 0.74, 32);
+    ctx.fillStyle = quest ? quest.color : "#fff2a5";
+    ctx.font = "900 10px Segoe UI";
+    ctx.fillText("MAIN QUEST", 30, 125);
+    ctx.fillStyle = "#fff5d7";
+    ctx.font = "800 10px Segoe UI";
+    ctx.fillText(quest ? `${state.collectedFragments.length}/5 코어 파편 수집` : "세르펜트 코어 완성", 30, 141);
+    ctx.fillStyle = "rgba(189,251,237,.88)";
+    ctx.fillText(quest ? `목표: ${quest.boss}` : "리프트 봉인 준비 완료", 30, 153);
+  }
 
-  const quest = nextQuestFragment();
-  ctx.textAlign = "left";
-  ctx.fillStyle = "rgba(2, 9, 7, .58)";
-  roundRect(18, 96, 176, 48, 12);
-  ctx.fill();
-  ctx.fillStyle = quest ? quest.color : "#fff2a5";
-  ctx.font = "900 10px Segoe UI";
-  ctx.fillText("MAIN QUEST", 30, 113);
-  ctx.fillStyle = "#fff5d7";
-  ctx.font = "800 10px Segoe UI";
-  ctx.fillText(quest ? `${state.collectedFragments.length}/5 코어 파편 수집` : "세르펜트 코어 완성", 30, 129);
-  ctx.fillStyle = "rgba(189,251,237,.88)";
-  ctx.fillText(quest ? `목표: ${quest.boss}` : "리프트 봉인 준비 완료", 30, 141);
-
-  if (enemies.some((e) => e.kind === "boss")) {
+  if (activeBoss) {
     const boss = enemies.find((e) => e.kind === "boss");
     const bossStage = stages[(boss.stageIndex ?? state.stageIndex) % stages.length];
     const phaseCount = 5;
     const hpRatio = clamp(boss.hp / boss.maxHp, 0, 1);
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(0,0,0,.62)";
-    roundRect(24, 92, W - 48, 54, 14);
-    ctx.fill();
+    if (!drawUiFrame(9, 18, 86, W - 36, 68, 0.94, 38)) {
+      ctx.fillStyle = "rgba(0,0,0,.62)";
+      roundRect(24, 92, W - 48, 54, 14);
+      ctx.fill();
+    }
     ctx.strokeStyle = bossStage.enemyColor;
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -3041,21 +3493,43 @@ function drawUi() {
     ctx.fillText(`${Math.ceil(hpRatio * 100)}%`, W - 38, 130);
   }
 
-  const baseX = W - 68;
-  const baseY = H - 300;
+  const baseX = W - 52;
+  const baseY = 256;
   skills.forEach((s, i) => {
-    const y = baseY + i * 55;
+    const y = baseY + i * 50;
     const ready = s.cd <= 0 && player.mp >= s.cost;
-    ctx.fillStyle = ready ? "rgba(13, 24, 20, .82)" : "rgba(5, 8, 8, .7)";
-    ctx.strokeStyle = ready ? s.color : "rgba(255,255,255,.18)";
-    ctx.lineWidth = 2;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = ready ? 0.34 : 0.08;
+    ctx.fillStyle = s.color;
     ctx.beginPath();
-    ctx.arc(baseX, y, 23, 0, Math.PI * 2);
+    ctx.arc(baseX, y, ready ? 25 : 21, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    const gemGrad = ctx.createRadialGradient(baseX - 9, y - 10, 4, baseX, y, 24);
+    gemGrad.addColorStop(0, ready ? "rgba(255,255,255,.48)" : "rgba(255,255,255,.14)");
+    gemGrad.addColorStop(0.35, ready ? hexAlpha(s.color, 0.5) : "rgba(18,24,24,.74)");
+    gemGrad.addColorStop(1, "rgba(0,0,0,.86)");
+    ctx.fillStyle = gemGrad;
+    ctx.strokeStyle = ready ? "#fff5d7" : "rgba(255,255,255,.18)";
+    ctx.lineWidth = ready ? 2.5 : 1.5;
+    ctx.shadowBlur = ready ? 18 : 0;
+    ctx.shadowColor = s.color;
+    ctx.beginPath();
+    ctx.arc(baseX, y, 21, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = ready ? s.color : "rgba(255,255,255,.18)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(baseX, y, 24, 0, Math.PI * 2);
+    ctx.stroke();
+    drawUiTile(2, baseX - 24, y - 24, 48, 48, ready ? 0.94 : 0.62);
     ctx.save();
     ctx.globalAlpha = ready ? 1 : 0.45;
-    if (!drawAtlas(sprites.skillIcons, i, 96, 96, baseX - 22, y - 22, 44, 44)) {
+    if (!drawAtlas(sprites.skillIcons, i, 96, 96, baseX - 19, y - 19, 38, 38)) {
       ctx.fillStyle = ready ? s.color : "rgba(255,255,255,.45)";
       ctx.font = "800 20px Segoe UI";
       ctx.textAlign = "center";
@@ -3066,47 +3540,53 @@ function drawUi() {
       ctx.fillStyle = "rgba(0, 0, 0, .58)";
       ctx.beginPath();
       ctx.moveTo(baseX, y);
-      ctx.arc(baseX, y, 23, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (s.cd / s.maxCd));
+      ctx.arc(baseX, y, 21, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (s.cd / s.maxCd));
       ctx.closePath();
       ctx.fill();
       ctx.fillStyle = "#fff";
       ctx.font = "800 12px Segoe UI";
       ctx.fillText(Math.ceil(s.cd), baseX, y + 4);
     }
+    ctx.fillStyle = "rgba(0,0,0,.72)";
+    ctx.strokeStyle = ready ? s.color : "rgba(255,255,255,.18)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(baseX + 17, y - 17, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = ready ? "#fff5d7" : "rgba(255,255,255,.5)";
+    ctx.font = "900 9px Segoe UI";
+    ctx.fillText(`${i + 1}`, baseX + 17, y - 14);
   });
 
   ctx.textAlign = "center";
   [
-    { id: "bag", x: W - 92, y: 92, icon: 0, active: state.panel === "inventory" },
-    { id: "skill", x: W - 42, y: 92, icon: 5, active: state.panel === "skills" },
+    { id: "bag", x: W - 92, y: 146, icon: 0, active: state.panel === "inventory" },
+    { id: "skill", x: W - 42, y: 146, icon: 5, active: state.panel === "skills" },
   ].forEach((b) => {
-    ctx.fillStyle = b.active ? "rgba(255, 224, 95, .34)" : "rgba(5, 15, 15, .68)";
-    ctx.strokeStyle = b.active ? "#ffd965" : "rgba(141,255,251,.45)";
-    ctx.lineWidth = 2;
-    roundRect(b.x - 18, b.y - 18, 36, 36, 10);
-    ctx.fill();
-    ctx.stroke();
+    drawUiTile(8, b.x - 23, b.y - 23, 46, 46, b.active ? 1 : 0.72);
     drawAtlas(sprites.itemIcons, b.icon, 72, 72, b.x - 15, b.y - 15, 30, 30);
   });
 
   const mountX = W - 42;
-  const mountY = 142;
-  ctx.fillStyle = player.mounted ? "rgba(184,255,125,.32)" : "rgba(5, 15, 15, .68)";
-  ctx.strokeStyle = player.mounted ? pet.color : "rgba(184,255,125,.48)";
-  ctx.lineWidth = 2;
-  roundRect(mountX - 19, mountY - 19, 38, 38, 11);
-  ctx.fill();
-  ctx.stroke();
+  const mountY = 204;
+  drawUiTile(8, mountX - 24, mountY - 24, 48, 48, player.mounted ? 1 : 0.72);
   ctx.globalCompositeOperation = "lighter";
   ctx.strokeStyle = pet.color;
   ctx.shadowBlur = player.mounted ? 18 : 8;
   ctx.shadowColor = pet.color;
-  ctx.beginPath();
-  ctx.ellipse(mountX, mountY + 3, 13, 8, -0.25, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(mountX + 8, mountY - 6, 6, 0, Math.PI * 2);
-  ctx.stroke();
+  if (sprites.lumiMount.complete && sprites.lumiMount.naturalWidth > 0) {
+    const iw = 30;
+    const ih = iw * (sprites.lumiMount.naturalHeight / sprites.lumiMount.naturalWidth);
+    ctx.drawImage(sprites.lumiMount, mountX - iw * 0.5, mountY - ih * 0.55, iw, ih);
+  } else {
+    ctx.beginPath();
+    ctx.ellipse(mountX, mountY + 3, 13, 8, -0.25, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(mountX + 8, mountY - 6, 6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.globalCompositeOperation = "source-over";
   ctx.shadowBlur = 0;
   ctx.textAlign = "center";
@@ -3115,76 +3595,77 @@ function drawUi() {
   ctx.fillText("R", mountX, mountY + 23);
 
   ctx.textAlign = "left";
-  ctx.fillStyle = "rgba(4, 10, 8, .62)";
-  roundRect(14, H - 146, 236, 44, 13);
-  ctx.fill();
+  const partyPanelY = H - 116;
+  if (!drawUiFrame(7, 12, partyPanelY, 336, 88, 0.86, 34)) {
+    ctx.fillStyle = "rgba(4, 10, 8, .62)";
+    roundRect(18, partyPanelY + 6, 324, 72, 13);
+    ctx.fill();
+  }
   ctx.fillStyle = "#fff5d7";
   ctx.font = "900 10px Segoe UI";
-  ctx.fillText("PARTY SUPPORT", 28, H - 127);
+  ctx.fillText("PARTY ROLES", 28, partyPanelY + 22);
   [...partyMembers, pet].forEach((unit, i) => {
-    const x = 112 + i * 42;
-    const y = H - 124;
-    const readyRatio = clamp(1 - unit.cd / unit.maxCd, 0, 1);
+    const x = 24 + i * 78;
+    const y = partyPanelY + 54;
+    const readyRatio = clamp(1 - (unit.specialCd || 0) / (unit.maxSpecialCd || unit.maxCd), 0, 1);
+    ctx.textAlign = "left";
+    drawUiFrame(7, x - 2, y - 24, 74, 58, 0.58, 26);
+    const iconX = x + 18;
     ctx.fillStyle = hexAlpha(unit.color, 0.18);
     ctx.strokeStyle = unit.color;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(x, y, 15, 0, Math.PI * 2);
+    ctx.arc(iconX, y, 13, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.globalCompositeOperation = "lighter";
     ctx.strokeStyle = unit.color;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.arc(x, y, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * readyRatio);
+    ctx.arc(iconX, y, 16, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * readyRatio);
     ctx.stroke();
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 10px Segoe UI";
+    ctx.font = "900 9px Segoe UI";
     ctx.textAlign = "center";
-    ctx.fillText(unit.type === "pet" ? "P" : unit.type === "healer" ? "H" : "G", x, y + 4);
+    ctx.fillText(unit.type === "pet" ? "P" : unit.type === "healer" ? "+": "D", iconX, y + 4);
+    ctx.textAlign = "left";
+    ctx.fillStyle = unit.color;
+    ctx.font = "900 8px Segoe UI";
+    ctx.fillText(unit.role, x + 34, y - 7);
+    ctx.fillStyle = "#fff5d7";
+    ctx.font = "800 6.5px Segoe UI";
+    ctx.fillText(unit.skillName || "Assist", x + 34, y + 7);
   });
   if (state.partyBarrier > 0) {
-    drawBar(28, H - 111, 68, 5, state.partyBarrier, 1.35, "#ffd965", "rgba(255,255,255,.12)");
+    drawBar(24, partyPanelY + 77, 100, 5, state.partyBarrier, 2.1, "#ffd965", "rgba(255,255,255,.12)");
   }
 
   ctx.textAlign = "left";
-  ctx.fillStyle = "rgba(4, 10, 8, .62)";
-  roundRect(14, H - 92, 190, 46, 13);
-  ctx.fill();
+  drawUiFrame(7, 10, H - 184, 184, 52, 0.72, 28);
   ctx.fillStyle = "#fff5d7";
   ctx.font = "800 13px Segoe UI";
-  ctx.fillText("Auto Skills ON", 28, H - 65);
+  ctx.fillText("Auto Skills ON", 24, H - 154);
   ctx.fillStyle = "#83ffd5";
-  ctx.fillText(`${state.score.toLocaleString()} pts`, 123, H - 65);
+  ctx.fillText(`${state.score.toLocaleString()} pts`, 116, H - 154);
 
-  drawBar(224, H - 76, 132, 8, state.ultimateCharge, 100, "#ffffff", "rgba(255,255,255,.14)");
+  drawUiFrame(13, 206, H - 184, 158, 52, 0.62, 26);
+  drawBar(220, H - 158, 128, 8, state.ultimateCharge, 100, "#ffffff", "rgba(255,255,255,.14)");
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff5d7";
   ctx.font = "800 11px Segoe UI";
-  ctx.fillText("OVERDRIVE", 290, H - 84);
+  ctx.fillText("OVERDRIVE", 284, H - 166);
 
   const joyAlpha = input.joyActive ? 0.78 : 0.34;
   ctx.globalAlpha = joyAlpha;
-  ctx.fillStyle = "rgba(4, 12, 10, .68)";
-  ctx.strokeStyle = "rgba(154, 255, 204, .52)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(input.joyStartX, input.joyStartY, 48, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "rgba(131, 255, 213, .76)";
-  ctx.beginPath();
-  ctx.arc(input.joyX, input.joyY, 20, 0, Math.PI * 2);
-  ctx.fill();
+  drawUiTile(2, input.joyStartX - 44, input.joyStartY - 44, 88, 88, 0.46);
+  drawUiTile(8, input.joyX - 22, input.joyY - 22, 44, 44, 0.78);
   ctx.globalAlpha = 1;
 
   if (state.messageTime > 0) {
     ctx.textAlign = "center";
     ctx.globalAlpha = clamp(state.messageTime, 0, 1);
-    ctx.fillStyle = "rgba(0,0,0,.35)";
-    roundRect(48, H * 0.44 - 27, W - 96, 54, 18);
-    ctx.fill();
+    drawUiFrame(11, 42, H * 0.44 - 34, W - 84, 68, 0.86, 32);
     ctx.fillStyle = "#fff4c8";
     ctx.font = "900 22px Segoe UI";
     ctx.fillText(state.message, W / 2, H * 0.44 + 8);
@@ -3207,9 +3688,7 @@ function drawUi() {
     const stage = currentStage();
     ctx.globalAlpha = Math.min(1, a * 1.35);
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(0,0,0,.38)";
-    roundRect(28, 204, W - 56, 126, 20);
-    ctx.fill();
+    drawUiFrame(11, 24, 198, W - 48, 138, 0.9, 42);
     ctx.strokeStyle = stage.enemyColor;
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -3249,8 +3728,8 @@ function beginPlay() {
   state.shake = 8;
   state.partyBarrier = 0;
   partyMembers.forEach((member, i) => {
-    member.x = player.x + (i === 0 ? -42 : 44);
-    member.y = player.y + 42 + i * 14;
+    member.x = player.x + [-46, -8, 48][i];
+    member.y = player.y + 42 + i * 12;
     member.cd = Math.min(member.cd, 0.6);
   });
   pet.x = player.x - 18;
@@ -3319,22 +3798,7 @@ function drawTitleScreen() {
 
   ctx.save();
   ctx.globalAlpha = 0.74;
-  ctx.strokeStyle = "rgba(208, 174, 101, .42)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(42, 126);
-  ctx.lineTo(W - 42, 126);
-  ctx.moveTo(58, 138);
-  ctx.lineTo(W - 58, 138);
-  ctx.stroke();
-  for (const x of [52, W - 52]) {
-    ctx.save();
-    ctx.translate(x, 132);
-    ctx.rotate(Math.PI / 4);
-    ctx.strokeStyle = "rgba(255, 226, 144, .62)";
-    ctx.strokeRect(-8, -8, 16, 16);
-    ctx.restore();
-  }
+  drawUiTile(12, 42, 112, W - 84, 54, 0.86);
   ctx.restore();
 
   ctx.save();
@@ -3382,18 +3846,7 @@ function drawTitleScreen() {
   const by = H * 0.805;
   const bw = 236;
   const bh = 52;
-  const btnGrad = ctx.createLinearGradient(bx, by, bx, by + bh);
-  btnGrad.addColorStop(0, "rgba(78, 55, 34, .82)");
-  btnGrad.addColorStop(0.5, "rgba(18, 18, 29, .88)");
-  btnGrad.addColorStop(1, "rgba(7, 8, 16, .92)");
-  ctx.fillStyle = btnGrad;
-  roundRect(bx, by, bw, bh, 8);
-  ctx.fill();
-  ctx.strokeStyle = `rgba(234, 193, 104, ${0.72 + pulse * 0.2})`;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(255, 245, 200, .26)";
-  ctx.strokeRect(bx + 7, by + 7, bw - 14, bh - 14);
+  drawUiFrame(15, bx, by - 6, bw, bh + 12, 0.98, 36);
   ctx.shadowBlur = 16;
   ctx.shadowColor = "#e4b15b";
   ctx.font = "900 16px Georgia, serif";
@@ -3500,24 +3953,16 @@ function drawAnimeIntro() {
   const boxY = H - 202;
   const boxW = W - 44;
   const boxH = 154;
-  const boxGrad = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
-  boxGrad.addColorStop(0, "rgba(255, 255, 255, .92)");
-  boxGrad.addColorStop(0.08, "rgba(230, 248, 255, .94)");
-  boxGrad.addColorStop(1, "rgba(16, 29, 54, .94)");
-  ctx.fillStyle = boxGrad;
-  roundRect(boxX, boxY, boxW, boxH, 16);
+  drawUiFrame(10, boxX, boxY, boxW, boxH, 0.96, 42);
+  ctx.fillStyle = "rgba(8, 18, 34, .36)";
+  roundRect(boxX + 20, boxY + 22, boxW - 40, boxH - 38, 14);
   ctx.fill();
   ctx.strokeStyle = scene.side === "left" ? "#68dfff" : "#ffd96b";
   ctx.lineWidth = 3;
   ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,.75)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(boxX + 8, boxY + 8, boxW - 16, boxH - 16);
 
   const nameX = scene.side === "left" ? boxX + 26 : boxX + boxW - 126;
-  ctx.fillStyle = scene.side === "left" ? "#1c84c7" : "#b57818";
-  roundRect(nameX, boxY - 22, 104, 34, 12);
-  ctx.fill();
+  drawUiFrame(1, nameX - 8, boxY - 30, 120, 46, 0.94, 26);
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 15px Segoe UI";
   ctx.textAlign = "center";
@@ -3538,7 +3983,20 @@ function drawAnimeIntro() {
   ctx.restore();
 }
 
+function resetCanvasState() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.filter = "none";
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 1;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
 function draw() {
+  resetCanvasState();
+  ctx.clearRect(0, 0, W, H);
   if (state.screen === "title") {
     drawTitleScreen();
     return;
@@ -3548,16 +4006,12 @@ function draw() {
     return;
   }
   ctx.save();
-  const shakeBoost = state.hitStop > 0 ? 1.08 : 1;
-  const cameraShake = Math.min(state.shake, 16) * 0.5;
-  const sx = rand(-cameraShake, cameraShake) * shakeBoost;
-  const sy = rand(-cameraShake, cameraShake) * shakeBoost;
-  ctx.translate(sx, sy);
-  if (state.shake > 14) {
-    const zoom = 1 + Math.min(0.014, state.shake * 0.0007);
-    ctx.translate(W / 2, H / 2);
-    ctx.scale(zoom, zoom);
-    ctx.translate(-W / 2, -H / 2);
+  const impactShake = Math.min(state.shake, 16);
+  if (impactShake > 0.1) {
+    const power = impactShake * 0.34;
+    const sx = Math.sin(state.t * 118) * power;
+    const sy = Math.cos(state.t * 91) * power * 0.68;
+    ctx.translate(sx, sy);
   }
   drawBackground();
   for (const h of hazards) drawHazard(h);
@@ -3586,18 +4040,18 @@ function draw() {
   ctx.restore();
 
   if (state.lootFlash > 0) {
-    ctx.fillStyle = `rgba(255, 226, 93, ${state.lootFlash * 0.08})`;
+    ctx.fillStyle = `rgba(255, 226, 93, ${state.lootFlash * 0.035})`;
     ctx.fillRect(0, 0, W, H);
   }
   if (state.powerFlash > 0) {
-    const a = Math.min(0.34, state.powerFlash);
+    const a = Math.min(0.18, state.powerFlash);
     ctx.globalCompositeOperation = "lighter";
-    ctx.fillStyle = `rgba(255,255,255,${a * 0.22})`;
+    ctx.fillStyle = `rgba(255,255,255,${a * 0.08})`;
     ctx.fillRect(0, 0, W, H);
     const rg = ctx.createRadialGradient(player.x, player.y, 12, player.x, player.y, 360);
-    rg.addColorStop(0, `rgba(255,245,164,${a * 0.75})`);
-    rg.addColorStop(0.3, `rgba(88,230,255,${a * 0.34})`);
-    rg.addColorStop(0.74, `rgba(150,74,255,${a * 0.18})`);
+    rg.addColorStop(0, `rgba(255,245,164,${a * 0.28})`);
+    rg.addColorStop(0.3, `rgba(88,230,255,${a * 0.12})`);
+    rg.addColorStop(0.74, `rgba(150,74,255,${a * 0.06})`);
     rg.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = rg;
     ctx.fillRect(0, 0, W, H);
@@ -3606,10 +4060,10 @@ function draw() {
   if (state.shockwave > 0) {
     const p = 1 - state.shockwave;
     ctx.save();
-    ctx.globalAlpha = state.shockwave * 0.38;
-    ctx.strokeStyle = "rgba(255,255,255,.78)";
-    ctx.lineWidth = 10;
-    ctx.shadowBlur = 30;
+    ctx.globalAlpha = state.shockwave * 0.2;
+    ctx.strokeStyle = "rgba(255,255,255,.5)";
+    ctx.lineWidth = 6;
+    ctx.shadowBlur = 14;
     ctx.shadowColor = "#7df3ff";
     ctx.beginPath();
     ctx.ellipse(player.x, player.y, 80 + p * 220, 24 + p * 76, player.facing, 0, Math.PI * 2);
@@ -3672,7 +4126,7 @@ function setJoystick(p) {
 function resetJoystick() {
   input.joyActive = false;
   input.joyStartX = 82;
-  input.joyStartY = H - 156;
+  input.joyStartY = H - 232;
   input.joyX = input.joyStartX;
   input.joyY = input.joyStartY;
   input.moveX = 0;
@@ -3700,22 +4154,22 @@ function handlePointer(ev) {
     }
     return;
   }
-  if (p.y > 70 && p.y < 116 && p.x > W - 116 && p.x < W - 20) {
+  if (p.y > 122 && p.y < 170 && p.x > W - 118 && p.x < W - 18) {
     state.panel = p.x < W - 66 ? "inventory" : "skills";
     input.down = false;
     resetJoystick();
     return;
   }
-  if (p.x > W - 68 && p.x < W - 16 && p.y > 116 && p.y < 168) {
+  if (p.x > W - 68 && p.x < W - 16 && p.y > 180 && p.y < 228) {
     toggleMount();
     input.down = false;
     resetJoystick();
     return;
   }
   for (let i = 0; i < skills.length; i += 1) {
-    const bx = W - 68;
-    const by = H - 300 + i * 55;
-    if (dist(p.x, p.y, bx, by) < 34) {
+    const bx = W - 52;
+    const by = 256 + i * 50;
+    if (dist(p.x, p.y, bx, by) < 28) {
       castSkill(i);
       return;
     }
