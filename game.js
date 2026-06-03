@@ -712,12 +712,12 @@ function syncStageForWave() {
   const nextIndex = (floorNumber() - 1) % stages.length;
   if (nextIndex !== state.stageIndex) {
     state.stageIndex = nextIndex;
-    state.stageIntro = 3;
+    state.stageIntro = 1.9;
     state.message = `${stageCode()} ${currentStage().name.toUpperCase()}`;
     state.messageTime = 2;
-    state.powerFlash = Math.max(state.powerFlash, 0.55);
-    state.shockwave = 1;
-    state.shake = Math.max(state.shake, 8);
+    state.powerFlash = Math.max(state.powerFlash, 0.2);
+    state.shockwave = Math.max(state.shockwave, 0.45);
+    state.shake = Math.max(state.shake, 4);
   }
 }
 
@@ -725,7 +725,7 @@ function advanceStage() {
   addQuestProgress("stageClears", 1);
   state.wave += 1;
   syncStageForWave();
-  state.stageIntro = 2.6;
+  state.stageIntro = 1.75;
   state.nextStageKills = state.kills + KILLS_PER_STAGE;
   enemies.length = 0;
   hazards.length = 0;
@@ -4149,7 +4149,7 @@ function drawUi() {
     ctx.fillText(`${Math.ceil(hpRatio * 100)}%`, W - 38, 130);
   }
 
-  const compactIntro = state.stageIntro > 0.2 || state.raidIntro > 0.2;
+  const compactIntro = state.raidIntro > 0.2;
   const baseX = W - 52;
   const baseY = 256;
   if (!compactIntro) skills.forEach((s, i) => {
@@ -4350,11 +4350,11 @@ function drawUi() {
     ctx.shadowBlur = 0;
   }
   if (state.stageIntro > 0) {
-    const a = clamp(state.stageIntro / 3, 0, 1);
+    const a = clamp(state.stageIntro / 2.2, 0, 1);
     const stage = currentStage();
-    ctx.globalAlpha = Math.min(1, a * 1.35);
+    ctx.globalAlpha = Math.min(0.82, a * 1.05);
     ctx.textAlign = "center";
-    drawUiFrame(11, 24, 198, W - 48, 138, 0.9, 42);
+    drawUiFrame(11, 24, 198, W - 48, 138, 0.72, 42);
     ctx.strokeStyle = stage.enemyColor;
     ctx.lineWidth = 2;
     ctx.stroke();
