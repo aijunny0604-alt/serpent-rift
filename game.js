@@ -23,14 +23,14 @@ const stages = [
 
 const sprites = {
   player: loadImage("./assets/player.png"),
-  playerSheet: loadImage("./assets/player-action-sheet-4k-v1.png"),
-  playerRidingSheet: loadImage("./assets/player-riding-sheet-4k-v1.png"),
+  playerSheet: loadImage("./assets/player-action-sheet.png"),
+  playerRidingSheet: loadImage("./assets/player-riding-sheet-v2.png"),
   lumiMount: loadImage("./assets/lumi-mount-v2.png"),
-  partnerAriaSheet: loadImage("./assets/partner-aria-sheet-4k-v1.png"),
-  partnerBranSheet: loadImage("./assets/partner-bran-sheet-4k-v1.png"),
-  partnerRenSheet: loadImage("./assets/partner-ren-sheet-4k-v1.png"),
-  portraitHero: loadImage("./assets/portrait-hero-source.png"),
-  portraitGuide: loadImage("./assets/portrait-guide-source.png"),
+  partnerAriaSheet: loadImage("./assets/partner-aria-sheet.png"),
+  partnerBranSheet: loadImage("./assets/partner-bran-sheet.png"),
+  partnerRenSheet: loadImage("./assets/partner-ren-sheet.png"),
+  portraitHero: loadImage("./assets/portrait-hero.png"),
+  portraitGuide: loadImage("./assets/portrait-guide.png"),
   titleKeyart: loadImage("./assets/title-keyart-serpent-rift.png"),
   skillIcons: markLogicalSize(loadImage("./assets/skill-icons-v2-4k-v1.png"), 768, 96),
   itemIcons: markLogicalSize(loadImage("./assets/item-icons-4k-v1.png"), 576, 72),
@@ -39,22 +39,22 @@ const sprites = {
   lootIcons: markLogicalSize(loadImage("./assets/loot-icons-4k-v1.png"), 288, 72),
   elementFx: markLogicalSize(loadImage("./assets/element-fx-4k-v1.png"), 512, 256),
   combatFx: loadImage("./assets/combat-fx-atlas.png"),
-  magicFx: markLogicalSize(loadImage("./assets/magic-fx-atlas-generated-4k-v1.png"), 2048, 256),
+  magicFx: markLogicalSize(loadImage("./assets/magic-fx-atlas-generated-game-v1.png"), 2048, 256),
   uiFantasy: loadImage("./assets/ui-fantasy-atlas-v2.png"),
   townMap: loadImage("./assets/town-map-4k-v1.png"),
   townBuildings: loadImage("./assets/town-buildings-atlas-4k-v1.png"),
   townUi: loadImage("./assets/town-ui-atlas-4k-v1.png"),
   shade: loadImage("./assets/shade.png"),
-  shadeSheet: loadImage("./assets/shade-action-sheet-4k-v1.png"),
+  shadeSheet: loadImage("./assets/shade-action-sheet.png"),
   elite: loadImage("./assets/elite.png"),
-  eliteSheet: loadImage("./assets/elite-action-sheet-4k-v1.png"),
+  eliteSheet: loadImage("./assets/elite-action-sheet.png"),
   boss: loadImage("./assets/boss.png"),
-  bossSheet: loadImage("./assets/boss-action-sheet-4k-v1.png"),
+  bossSheet: loadImage("./assets/boss-action-sheet.png"),
   bossSheets: [
-    loadImage("./assets/boss-forest-action-sheet-4k-v1.png"),
-    loadImage("./assets/boss-volcano-action-sheet-4k-v1.png"),
-    loadImage("./assets/boss-frost-action-sheet-4k-v1.png"),
-    loadImage("./assets/boss-void-action-sheet-4k-v1.png"),
+    loadImage("./assets/boss-forest-action-sheet.png"),
+    loadImage("./assets/boss-volcano-action-sheet.png"),
+    loadImage("./assets/boss-frost-action-sheet.png"),
+    loadImage("./assets/boss-void-action-sheet.png"),
   ],
   bossSprites: [
     loadImage("./assets/boss-floorlord-1.png"),
@@ -1925,7 +1925,7 @@ function drawCombatFx(index, x, y, size, rotation = 0, alpha = 1, scaleY = 1) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(rotation);
-  ctx.globalCompositeOperation = "source-over";
+  ctx.globalCompositeOperation = "lighter";
   ctx.globalAlpha = alpha * 0.74;
   ctx.drawImage(img, sx, sy, sw, sh, -size / 2, (-size * scaleY) / 2, size, size * scaleY);
   ctx.restore();
@@ -2034,9 +2034,7 @@ function roundRect(x, y, w, h, r) {
 function drawBackground() {
   const stage = currentStage();
   const img = stage.image;
-  const blur = Math.min(1.8, state.powerFlash * 1.35 + state.shockwave * 0.75 + (player.attackAnim > 0 ? 0.22 : 0));
   ctx.save();
-  if (blur > 0.12) ctx.filter = `blur(${blur}px) saturate(${1 + blur * 0.035})`;
   if (img.complete) {
     const scale = Math.max(W / img.width, H / img.height);
     const bw = img.width * scale;
@@ -3239,12 +3237,12 @@ function drawHazard(h) {
     const p = 1 - h.life / h.max;
     const palette = effectPalette("thunderStorm", h.color);
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.22;
+    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.14;
     drawCombatFx(1, W / 2, H * 0.43, 560 + p * 130, 0, clamp(h.life / h.max, 0, 1) * 0.72, 1);
     const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, "rgba(115,245,255,.05)");
-    bg.addColorStop(0.5, "rgba(41,125,255,.04)");
-    bg.addColorStop(1, "rgba(255,242,110,.03)");
+    bg.addColorStop(0, "rgba(115,245,255,.024)");
+    bg.addColorStop(0.5, "rgba(41,125,255,.018)");
+    bg.addColorStop(1, "rgba(255,242,110,.012)");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
     ctx.lineWidth = 3;
@@ -3284,12 +3282,12 @@ function drawHazard(h) {
     const p = 1 - h.life / h.max;
     const palette = effectPalette("infernoField", h.color);
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.22;
+    ctx.globalAlpha = clamp(h.life / h.max, 0, 1) * 0.14;
     drawCombatFx(3, h.x, h.y - 40, 470 + p * 135, state.t * 0.12, clamp(h.life / h.max, 0, 1) * 0.62, 1);
     const bg = ctx.createRadialGradient(h.x, h.y, 10, h.x, h.y, 360);
-    bg.addColorStop(0, "rgba(255,255,255,.08)");
-    bg.addColorStop(0.3, "rgba(255,90,46,.08)");
-    bg.addColorStop(0.58, "rgba(255,212,90,.05)");
+    bg.addColorStop(0, "rgba(255,255,255,.045)");
+    bg.addColorStop(0.3, "rgba(255,90,46,.04)");
+    bg.addColorStop(0.58, "rgba(255,212,90,.024)");
     bg.addColorStop(1, "rgba(167,0,40,0)");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
@@ -4772,21 +4770,20 @@ function draw() {
   ctx.restore();
 
   if (state.lootFlash > 0) {
-    ctx.fillStyle = `rgba(255, 226, 93, ${state.lootFlash * 0.035})`;
+    ctx.fillStyle = `rgba(255, 226, 93, ${state.lootFlash * 0.015})`;
     ctx.fillRect(0, 0, W, H);
   }
   if (state.powerFlash > 0) {
-    const a = Math.min(0.18, state.powerFlash);
+    const a = Math.min(0.12, state.powerFlash);
     ctx.globalCompositeOperation = "lighter";
-    ctx.fillStyle = `rgba(255,255,255,${a * 0.08})`;
-    ctx.fillRect(0, 0, W, H);
-    const rg = ctx.createRadialGradient(player.x, player.y, 12, player.x, player.y, 360);
-    rg.addColorStop(0, `rgba(255,245,164,${a * 0.28})`);
-    rg.addColorStop(0.3, `rgba(88,230,255,${a * 0.12})`);
-    rg.addColorStop(0.74, `rgba(150,74,255,${a * 0.06})`);
+    const r = 230;
+    const rg = ctx.createRadialGradient(player.x, player.y, 12, player.x, player.y, r);
+    rg.addColorStop(0, `rgba(255,245,164,${a * 0.22})`);
+    rg.addColorStop(0.3, `rgba(88,230,255,${a * 0.08})`);
+    rg.addColorStop(0.74, `rgba(150,74,255,${a * 0.035})`);
     rg.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = rg;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(player.x - r, player.y - r, r * 2, r * 2);
     ctx.globalCompositeOperation = "source-over";
   }
   if (state.shockwave > 0) {
@@ -4805,13 +4802,14 @@ function draw() {
   if (player.attackAnim > 0) {
     const p = clamp(1 - player.attackAnim / 0.46, 0, 1);
     const flash = Math.sin(p * Math.PI);
-    const g = ctx.createRadialGradient(player.x, player.y, 10, player.x, player.y, 220);
-    g.addColorStop(0, `rgba(255,255,255,${0.12 * flash})`);
-    g.addColorStop(0.34, `rgba(95,232,255,${0.08 * flash})`);
-    g.addColorStop(0.72, `rgba(255,218,78,${0.05 * flash})`);
+    const r = 180;
+    const g = ctx.createRadialGradient(player.x, player.y, 10, player.x, player.y, r);
+    g.addColorStop(0, `rgba(255,255,255,${0.075 * flash})`);
+    g.addColorStop(0.34, `rgba(95,232,255,${0.05 * flash})`);
+    g.addColorStop(0.72, `rgba(255,218,78,${0.026 * flash})`);
     g.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(player.x - r, player.y - r, r * 2, r * 2);
   }
   drawRaidOverlay();
   drawUi();
