@@ -23,35 +23,38 @@ const stages = [
 
 const sprites = {
   player: loadImage("./assets/player.png"),
-  playerSheet: loadImage("./assets/player-action-sheet.png"),
-  playerRidingSheet: loadImage("./assets/player-riding-sheet-v2.png"),
+  playerSheet: loadImage("./assets/player-action-sheet-4k-v1.png"),
+  playerRidingSheet: loadImage("./assets/player-riding-sheet-4k-v1.png"),
   lumiMount: loadImage("./assets/lumi-mount-v2.png"),
-  partnerAriaSheet: loadImage("./assets/partner-aria-sheet.png"),
-  partnerBranSheet: loadImage("./assets/partner-bran-sheet.png"),
-  partnerRenSheet: loadImage("./assets/partner-ren-sheet.png"),
-  portraitHero: loadImage("./assets/portrait-hero.png"),
-  portraitGuide: loadImage("./assets/portrait-guide.png"),
+  partnerAriaSheet: loadImage("./assets/partner-aria-sheet-4k-v1.png"),
+  partnerBranSheet: loadImage("./assets/partner-bran-sheet-4k-v1.png"),
+  partnerRenSheet: loadImage("./assets/partner-ren-sheet-4k-v1.png"),
+  portraitHero: loadImage("./assets/portrait-hero-source.png"),
+  portraitGuide: loadImage("./assets/portrait-guide-source.png"),
   titleKeyart: loadImage("./assets/title-keyart-serpent-rift.png"),
-  skillIcons: loadImage("./assets/skill-icons-v2.png"),
-  itemIcons: loadImage("./assets/item-icons.png"),
+  skillIcons: markLogicalSize(loadImage("./assets/skill-icons-v2-4k-v1.png"), 768, 96),
+  itemIcons: markLogicalSize(loadImage("./assets/item-icons-4k-v1.png"), 576, 72),
   uiPanel: loadImage("./assets/ui-panel.png"),
-  runeEffects: loadImage("./assets/rune-effects.png"),
-  lootIcons: loadImage("./assets/loot-icons.png"),
-  elementFx: loadImage("./assets/element-fx.png"),
+  runeEffects: markLogicalSize(loadImage("./assets/rune-effects-4k-v1.png"), 768, 256),
+  lootIcons: markLogicalSize(loadImage("./assets/loot-icons-4k-v1.png"), 288, 72),
+  elementFx: markLogicalSize(loadImage("./assets/element-fx-4k-v1.png"), 512, 256),
   combatFx: loadImage("./assets/combat-fx-atlas.png"),
-  magicFx: loadImage("./assets/magic-fx-atlas-v2.png"),
+  magicFx: markLogicalSize(loadImage("./assets/magic-fx-atlas-generated-4k-v1.png"), 2048, 256),
   uiFantasy: loadImage("./assets/ui-fantasy-atlas-v2.png"),
+  townMap: loadImage("./assets/town-map-4k-v1.png"),
+  townBuildings: loadImage("./assets/town-buildings-atlas-4k-v1.png"),
+  townUi: loadImage("./assets/town-ui-atlas-4k-v1.png"),
   shade: loadImage("./assets/shade.png"),
-  shadeSheet: loadImage("./assets/shade-action-sheet.png"),
+  shadeSheet: loadImage("./assets/shade-action-sheet-4k-v1.png"),
   elite: loadImage("./assets/elite.png"),
-  eliteSheet: loadImage("./assets/elite-action-sheet.png"),
+  eliteSheet: loadImage("./assets/elite-action-sheet-4k-v1.png"),
   boss: loadImage("./assets/boss.png"),
-  bossSheet: loadImage("./assets/boss-action-sheet.png"),
+  bossSheet: loadImage("./assets/boss-action-sheet-4k-v1.png"),
   bossSheets: [
-    loadImage("./assets/boss-forest-action-sheet.png"),
-    loadImage("./assets/boss-volcano-action-sheet.png"),
-    loadImage("./assets/boss-frost-action-sheet.png"),
-    loadImage("./assets/boss-void-action-sheet.png"),
+    loadImage("./assets/boss-forest-action-sheet-4k-v1.png"),
+    loadImage("./assets/boss-volcano-action-sheet-4k-v1.png"),
+    loadImage("./assets/boss-frost-action-sheet-4k-v1.png"),
+    loadImage("./assets/boss-void-action-sheet-4k-v1.png"),
   ],
   bossSprites: [
     loadImage("./assets/boss-floorlord-1.png"),
@@ -114,13 +117,21 @@ const _tintCanvas = document.createElement("canvas");
 const _tintCtx = _tintCanvas.getContext("2d");
 
 function drawSheetFrameTinted(sheet, sx, sy, sw, sh, dx, dy, dw, dh, tints) {
-  const ow = Math.max(8, Math.ceil(sw));
-  const oh = Math.max(8, Math.ceil(sh));
+  const sxScale = sheet.naturalWidth > 0 ? sheet.naturalWidth / (sw * 6) : 1;
+  const syScale = sxScale > 1 ? sxScale : 1;
+  const sourceScale = Number.isFinite(sxScale) && sxScale > 1 ? sxScale : 1;
+  const sourceSyScale = Number.isFinite(syScale) && syScale > 1 ? syScale : 1;
+  const sourceSw = sw * sourceScale;
+  const sourceSh = sh * sourceSyScale;
+  const sourceSx = sx * sourceScale;
+  const sourceSy = sy * sourceSyScale;
+  const ow = Math.max(8, Math.ceil(sourceSw));
+  const oh = Math.max(8, Math.ceil(sourceSh));
   if (_tintCanvas.width !== ow) _tintCanvas.width = ow;
   if (_tintCanvas.height !== oh) _tintCanvas.height = oh;
   _tintCtx.globalCompositeOperation = "source-over";
   _tintCtx.clearRect(0, 0, ow, oh);
-  _tintCtx.drawImage(sheet, sx, sy, sw, sh, 0, 0, ow, oh);
+  _tintCtx.drawImage(sheet, sourceSx, sourceSy, sourceSw, sourceSh, 0, 0, ow, oh);
   if (tints && tints.length) {
     _tintCtx.globalCompositeOperation = "source-atop";
     for (const t of tints) {
@@ -163,6 +174,12 @@ function loadImage(src) {
   return img;
 }
 
+function markLogicalSize(img, logicalWidth, logicalHeight) {
+  img.logicalWidth = logicalWidth;
+  img.logicalHeight = logicalHeight;
+  return img;
+}
+
 const state = {
   t: 0,
   screen: "title",
@@ -193,6 +210,30 @@ const state = {
   collectedFragments: [],
   partyBarrier: 0,
   soundOn: false,
+  questStats: {
+    kills: 0,
+    elites: 0,
+    bosses: 0,
+    skills: 0,
+    loot: 0,
+    goldEarned: 0,
+    fragments: 0,
+    stageClears: 0,
+    partyAssists: 0,
+  },
+  completedQuests: [],
+  questToast: "",
+  questToastTime: 0,
+  questPulse: 0,
+  townPanel: null,
+  townMessage: "Rift Town에 도착했다",
+  townMessageTime: 2,
+  townUpgrades: {
+    weapon: 0,
+    pet: 0,
+    party: 0,
+  },
+  townContracts: [],
 };
 
 const introScenes = [
@@ -323,6 +364,118 @@ const coreFragments = [
   { id: "serpent", name: "세르펜트 코어", boss: "SERPENT CORE ECLIPSE", color: "#fff2a5", icon: 7 },
 ];
 
+const cleanStageCopy = [
+  ["1계층 / 고대 수해", "리프트의 입구. 세르펜트 코어의 첫 파편이 뿌리 아래 잠들어 있다.", "계층주 SERPENT ROOT OVERLORD"],
+  ["2계층 / 흑요의 관문", "불타는 차원의 성문. 잿빛 기사들의 갑옷에 분노가 스며 몬스터가 되었다.", "계층주 OBSIDIAN INFERNO TYRANT"],
+  ["3계층 / 얼어붙은 성채", "시간까지 얼어붙은 성채. 남겨진 기억들이 차가운 마력으로 깨어난다.", "계층주 GLACIAL MEMORY EMPRESS"],
+  ["4계층 / 별 없는 공허", "별빛과 그림자가 뒤섞인 최심부. 세르펜트 코어의 파장이 공허에서 맥동한다.", "계층주 ASTRAL ABYSS WATCHER"],
+  ["5계층 / 코어 성소", "모든 계층주의 파편이 모이는 최심부. 세르펜트 코어가 심장처럼 뛰고 있다.", "최종 계층주 SERPENT CORE ECLIPSE"],
+];
+
+cleanStageCopy.forEach(([chapter, lore, bossTitle], i) => {
+  if (!stages[i]) return;
+  stages[i].chapter = chapter;
+  stages[i].lore = lore;
+  stages[i].bossTitle = bossTitle;
+});
+
+partyMembers[0].name = "리아";
+partyMembers[1].name = "브란";
+partyMembers[2].name = "렌";
+pet.name = "루미";
+
+[
+  ["root", "뿌리의 코어 파편"],
+  ["obsidian", "흑요의 코어 파편"],
+  ["memory", "빙결 기억 코어 파편"],
+  ["void", "공허의 코어 파편"],
+  ["serpent", "세르펜트 코어"],
+].forEach(([id, name]) => {
+  const fragment = coreFragments.find((f) => f.id === id);
+  if (fragment) fragment.name = name;
+});
+
+introScenes.splice(
+  0,
+  introScenes.length,
+  {
+    speaker: "리아",
+    side: "right",
+    portrait: "portraitGuide",
+    line: "여기가 세르펜트 리프트야. 여러 차원이 겹쳐진 던전, 그리고 돌아오지 못한 모험가들의 무덤.",
+  },
+  {
+    speaker: "카엘",
+    side: "left",
+    portrait: "portraitHero",
+    line: "세르펜트 코어를 찾으면 닫힌 차원의 문을 열 수 있어. 그러려면 계층주를 넘어야겠지.",
+  },
+  {
+    speaker: "리아",
+    side: "right",
+    portrait: "portraitGuide",
+    line: "조심해. 계층주는 단순한 보스가 아니라 그 층의 법칙이야. 속도, 불, 얼음, 공허까지 전부 상대해야 해.",
+  },
+  {
+    speaker: "카엘",
+    side: "left",
+    portrait: "portraitHero",
+    line: "좋아. 던전의 법칙이라면 내가 그 법칙을 베어버리겠어. 레이드 시작이다.",
+  },
+);
+
+const questDefinitions = [
+  { id: "core", kind: "MAIN", title: "세르펜트 코어 복원", desc: "계층주를 쓰러뜨리고 코어 파편을 모아라.", stat: "fragments", target: 5, rewardGold: 500, rewardExp: 420, color: "#fff2a5" },
+  { id: "first_hunt", kind: "HUNT", title: "리프트 정화", desc: "일반 몬스터를 처치해 첫 거점을 확보한다.", stat: "kills", target: 20, rewardGold: 120, rewardExp: 90, color: "#7dffb0" },
+  { id: "elite_breaker", kind: "HUNT", title: "엘리트 추적", desc: "강화 개체를 격파해 파티의 진입로를 연다.", stat: "elites", target: 5, rewardGold: 180, rewardExp: 130, color: "#57dfff" },
+  { id: "skill_trial", kind: "SKILL", title: "스킬 연계 시험", desc: "자동 전투 중 스킬을 여러 번 발동한다.", stat: "skills", target: 15, rewardGold: 100, rewardExp: 100, color: "#d66bff" },
+  { id: "loot_order", kind: "SUPPLY", title: "보급품 회수", desc: "전장에서 골드와 장비 드롭을 회수한다.", stat: "loot", target: 18, rewardGold: 160, rewardExp: 80, color: "#ffd965" },
+  { id: "raid_oath", kind: "RAID", title: "계층주 토벌 서약", desc: "거대 계층주를 쓰러뜨려 레이드 증표를 획득한다.", stat: "bosses", target: 1, rewardGold: 260, rewardExp: 180, color: "#ff7184" },
+  { id: "floor_path", kind: "ROUTE", title: "층계 돌파", desc: "스테이지를 돌파하며 다음 계층으로 향한다.", stat: "stageClears", target: 4, rewardGold: 220, rewardExp: 150, color: "#8dfffb" },
+  { id: "party_sync", kind: "PARTY", title: "파티 합동 작전", desc: "동료와 펫의 보조 스킬을 전투에 활용한다.", stat: "partyAssists", target: 10, rewardGold: 140, rewardExp: 120, color: "#b8ff7d" },
+];
+
+const townBuildings = [
+  { id: "weapon", name: "Forge", title: "Weapon Smith", sub: "검 강화", x: 34, y: 328, w: 130, h: 108, color: "#ffd965", icon: 0, src: [0, 0, 560, 440] },
+  { id: "pet", name: "Pet Shop", title: "Lumi Pet Shop", sub: "펫 훈련", x: 270, y: 338, w: 124, h: 104, color: "#b8ff7d", icon: 6, src: [588, 0, 620, 430] },
+  { id: "partner", name: "Party Hall", title: "Partner Hall", sub: "동료 영입", x: 96, y: 458, w: 226, h: 100, color: "#8dfffb", icon: 5, src: [350, 395, 565, 420] },
+  { id: "guild", name: "Quest Hall", title: "Quest Office", sub: "의뢰소", x: 34, y: 632, w: 132, h: 104, color: "#d66bff", icon: 7, src: [0, 750, 590, 420] },
+  { id: "gate", name: "Gate", title: "Dungeon Gate", sub: "던전 입장", x: 254, y: 628, w: 136, h: 108, color: "#ff7184", icon: 4, src: [700, 790, 530, 400] },
+];
+
+const townShopItems = {
+  weapon: [
+    { id: "weapon1", name: "Rift Edge 강화", desc: "공격력 +4", cost: 80, levelKey: "weapon", max: 5, apply: () => { player.atk += 4; } },
+    { id: "weapon2", name: "치명 검광 조율", desc: "오버드라이브 +20", cost: 160, levelKey: "weapon", max: 5, apply: () => { state.ultimateCharge = Math.min(100, state.ultimateCharge + 20); } },
+  ],
+  pet: [
+    { id: "pet1", name: "루미 전투 훈련", desc: "펫 공격력 상승", cost: 110, levelKey: "pet", max: 4, apply: () => { pet.power += 0.08; pet.maxCd = Math.max(0.72, pet.maxCd - 0.04); } },
+    { id: "pet2", name: "라이딩 코어 정비", desc: "기동력 +12", cost: 150, levelKey: "pet", max: 4, apply: () => { player.speed += 12; } },
+  ],
+  partner: [
+    { id: "partner1", name: "리아 신뢰 퀘스트", desc: "힐러 보조 강화", cost: 90, levelKey: "party", max: 3, apply: () => { partyMembers[0].power += 0.08; partyMembers[0].maxSpecialCd = Math.max(4.8, partyMembers[0].maxSpecialCd - 0.35); } },
+    { id: "partner2", name: "브란/렌 합동 훈련", desc: "탱커와 딜러 보조 강화", cost: 140, levelKey: "party", max: 3, apply: () => { partyMembers[1].power += 0.06; partyMembers[2].power += 0.07; } },
+  ],
+};
+
+const townContracts = [
+  { id: "daily_hunt", name: "마을 의뢰: 균열 정찰", desc: "몬스터 8마리 처치", stat: "kills", target: 8, rewardGold: 70, rewardExp: 45, color: "#7dffb0" },
+  { id: "partner_recruit", name: "동료 영입: 신뢰 증명", desc: "파티 보조 3회 발동", stat: "partyAssists", target: 3, rewardGold: 90, rewardExp: 70, color: "#8dfffb" },
+  { id: "pet_delivery", name: "펫샵 의뢰: 코어 먹이", desc: "드롭 아이템 5개 회수", stat: "loot", target: 5, rewardGold: 85, rewardExp: 40, color: "#b8ff7d" },
+  { id: "raid_notice", name: "의뢰소 공고: 계층주 토벌", desc: "보스 1회 격파", stat: "bosses", target: 1, rewardGold: 180, rewardExp: 120, color: "#ff7184" },
+];
+
+const townUiRects = {
+  shopPanel: [0, 0, 680, 650],
+  questPanel: [710, 0, 520, 650],
+  shopCard: [0, 710, 650, 250],
+  contractCard: [710, 710, 510, 250],
+  pricePlaque: [0, 1040, 420, 130],
+  badge: [440, 990, 250, 250],
+  close: [710, 1000, 150, 150],
+  gateButton: [880, 990, 340, 220],
+};
+
 skills[0].icon = "*";
 skills[0].maxCd = 4.8;
 skills[0].cost = 18;
@@ -423,6 +576,138 @@ function nextQuestFragment() {
   return coreFragments.find((fragment) => !state.collectedFragments.includes(fragment.id)) || null;
 }
 
+function questProgress(quest) {
+  return clamp(state.questStats[quest.stat] || 0, 0, quest.target);
+}
+
+function questComplete(quest) {
+  return questProgress(quest) >= quest.target;
+}
+
+function visibleQuests() {
+  const active = questDefinitions.filter((quest) => !state.completedQuests.includes(quest.id));
+  const urgent = active.filter((quest) => quest.kind === "MAIN" || quest.kind === "RAID");
+  const rotating = active.filter((quest) => quest.kind !== "MAIN" && quest.kind !== "RAID");
+  return [...urgent, ...rotating].slice(0, 4);
+}
+
+function grantQuestReward(quest) {
+  state.completedQuests.push(quest.id);
+  state.gold += quest.rewardGold || 0;
+  state.score += (quest.rewardExp || 0) * 7;
+  player.exp += quest.rewardExp || 0;
+  player.hp = Math.min(player.maxHp, player.hp + 22);
+  player.mp = player.maxMp;
+  state.ultimateCharge = Math.min(100, state.ultimateCharge + 18);
+  state.questToast = `${quest.title} 완료  +${quest.rewardGold}G  +${quest.rewardExp}EXP`;
+  state.questToastTime = 3.2;
+  state.questPulse = 1;
+  state.comboText = "QUEST COMPLETE";
+  state.comboTime = 1.25;
+  state.message = quest.title;
+  state.messageTime = 1.7;
+  state.lootFlash = Math.max(state.lootFlash, 1.2);
+  state.powerFlash = Math.max(state.powerFlash, 0.35);
+  addPrismaticBurst(player.x, player.y - 44, [quest.color, "#ffffff", "#ffd965", "#57dfff"], 34, 1);
+}
+
+function checkQuestCompletions() {
+  for (const quest of questDefinitions) {
+    if (!state.completedQuests.includes(quest.id) && questComplete(quest)) {
+      grantQuestReward(quest);
+    }
+  }
+}
+
+function addQuestProgress(stat, amount = 1) {
+  if (!state.questStats || !Object.prototype.hasOwnProperty.call(state.questStats, stat)) return;
+  state.questStats[stat] += amount;
+  checkQuestCompletions();
+  checkTownContracts();
+}
+
+function activeTownContracts() {
+  return townContracts.filter((contract) => state.townContracts.includes(contract.id));
+}
+
+function contractProgress(contract) {
+  return clamp(state.questStats[contract.stat] || 0, 0, contract.target);
+}
+
+function checkTownContracts() {
+  for (const contract of activeTownContracts()) {
+    if (contractProgress(contract) < contract.target) continue;
+    state.townContracts = state.townContracts.filter((id) => id !== contract.id);
+    state.gold += contract.rewardGold;
+    player.exp += contract.rewardExp;
+    state.score += contract.rewardExp * 5;
+    state.townMessage = `${contract.name} 완료`;
+    state.townMessageTime = 3;
+    state.questToast = `${contract.name}  +${contract.rewardGold}G  +${contract.rewardExp}EXP`;
+    state.questToastTime = 3;
+    state.questPulse = 1;
+    addPrismaticBurst(player.x, player.y - 44, [contract.color, "#ffffff", "#ffd965"], 26, 0.9);
+  }
+}
+
+function enterTown(message = "Rift Town 귀환") {
+  state.screen = "town";
+  state.townPanel = null;
+  state.townMessage = message;
+  state.townMessageTime = 2.4;
+  state.paused = false;
+  resetJoystick();
+}
+
+function enterDungeon() {
+  state.screen = "play";
+  state.townPanel = null;
+  state.message = "ENTER THE RIFT";
+  state.messageTime = 1.5;
+  state.stageIntro = Math.max(state.stageIntro, 1.8);
+  state.powerFlash = Math.max(state.powerFlash, 0.32);
+  state.shake = Math.max(state.shake, 7);
+  resetJoystick();
+}
+
+function buyTownItem(item) {
+  const level = state.townUpgrades[item.levelKey] || 0;
+  if (level >= item.max) {
+    state.townMessage = "이미 최대 단계입니다";
+    state.townMessageTime = 1.6;
+    return;
+  }
+  const price = Math.floor(item.cost * (1 + level * 0.62));
+  if (state.gold < price) {
+    state.townMessage = "골드가 부족합니다";
+    state.townMessageTime = 1.6;
+    return;
+  }
+  state.gold -= price;
+  state.townUpgrades[item.levelKey] = level + 1;
+  item.apply();
+  levelUp();
+  state.townMessage = `${item.name} 완료`;
+  state.townMessageTime = 2.2;
+  state.questPulse = 1;
+}
+
+function acceptTownContract(contract) {
+  if (state.townContracts.includes(contract.id)) {
+    state.townMessage = "이미 진행 중인 의뢰입니다";
+    state.townMessageTime = 1.6;
+    return;
+  }
+  if (contractProgress(contract) >= contract.target) {
+    state.townMessage = "이미 조건을 달성했습니다. 전투 중 보상이 정산됩니다";
+    state.townMessageTime = 1.8;
+  }
+  state.townContracts.push(contract.id);
+  state.townMessage = `${contract.name} 수락`;
+  state.townMessageTime = 2.1;
+  checkTownContracts();
+}
+
 function syncStageForWave() {
   const nextIndex = (floorNumber() - 1) % stages.length;
   if (nextIndex !== state.stageIndex) {
@@ -437,6 +722,7 @@ function syncStageForWave() {
 }
 
 function advanceStage() {
+  addQuestProgress("stageClears", 1);
   state.wave += 1;
   syncStageForWave();
   state.stageIntro = 2.6;
@@ -755,6 +1041,9 @@ function damageEnemy(enemy, amount, color = "#fff2a5", sourceX = player.x, sourc
     state.gold += enemy.kind === "boss" ? 90 : enemy.kind === "elite" ? 14 : 6;
     state.score += gain * 5;
     state.kills += 1;
+    addQuestProgress("kills", 1);
+    if (enemy.kind === "elite") addQuestProgress("elites", 1);
+    if (enemy.kind === "boss") addQuestProgress("bosses", 1);
     pickups.push({ x: enemy.x, y: enemy.y, life: 1.3, value: gain });
     spawnLoot(enemy.x, enemy.y, enemy.kind);
     addParticle(enemy.x, enemy.y, enemy.kind === "boss" ? "#95ff70" : "#ffd965", enemy.kind === "boss" ? 42 : 16, 1.15);
@@ -972,7 +1261,10 @@ function updateSupportUnit(unit, dt, index, isPet = false) {
   }
 
   const target = nearestEnemyFrom(unit.x, unit.y);
-  if (castSupportSkill(unit, target, isPet)) return;
+  if (castSupportSkill(unit, target, isPet)) {
+    addQuestProgress("partyAssists", 1);
+    return;
+  }
   if (!target.enemy || target.d > unit.range || unit.cd > 0) return;
   unit.cd = unit.maxCd;
   unit.action = 0.38;
@@ -1009,7 +1301,10 @@ function updateParty(dt) {
     pet.action = Math.max(0, pet.action - dt);
     pet.pulse += dt;
     const target = nearestEnemyFrom(player.x, player.y);
-    if (castSupportSkill(pet, target, true)) return;
+    if (castSupportSkill(pet, target, true)) {
+      addQuestProgress("partyAssists", 1);
+      return;
+    }
     if (target.enemy && target.d <= pet.range + 50 && pet.cd <= 0) {
       pet.cd = pet.maxCd * 0.82;
       pet.action = 0.42;
@@ -1063,6 +1358,7 @@ function autoCastSkills(dt) {
 
 function castUltimate() {
   playSfx("ultimate");
+  addQuestProgress("skills", 1);
   const target = nearestEnemy().enemy || { x: W / 2, y: H * 0.42 };
   player.castAnim = 0.7;
   player.attackAnim = 0.58;
@@ -1085,6 +1381,7 @@ function castSkill(index) {
   const s = skills[index];
   if (!s || s.cd > 0 || player.mp < s.cost || player.hp <= 0) return;
   playSfx(s.id === "meteor" ? "meteor" : s.id === "lance" ? "slash" : "spell");
+  addQuestProgress("skills", 1);
   s.cd = s.maxCd;
   player.mp -= s.cost;
   state.comboText = `${s.name.toUpperCase()}!`;
@@ -1210,6 +1507,8 @@ function update(dt) {
   state.stageIntro = Math.max(0, state.stageIntro - dt);
   state.raidIntro = Math.max(0, state.raidIntro - dt);
   state.comboTime = Math.max(0, state.comboTime - dt);
+  state.questToastTime = Math.max(0, state.questToastTime - dt);
+  state.questPulse = Math.max(0, state.questPulse - dt * 1.8);
   state.shake = Math.max(0, state.shake - dt * 24);
   state.lootFlash = Math.max(0, state.lootFlash - dt);
   state.powerFlash = Math.max(0, state.powerFlash - dt * 1.8);
@@ -1518,10 +1817,17 @@ function update(dt) {
             state.lootFlash = 2.2;
             state.powerFlash = Math.max(state.powerFlash, 0.55);
             addPrismaticBurst(player.x, player.y - 40, [fragment.color, "#ffffff", "#ffd965", "#57dfff"], 46, 1.3);
+            addQuestProgress("fragments", 1);
           }
-        } else if (loot.icon === 0) state.gold += loot.value;
-        else {
-          state.gold += Math.floor(loot.value * 0.5);
+        } else if (loot.icon === 0) {
+          state.gold += loot.value;
+          addQuestProgress("loot", 1);
+          addQuestProgress("goldEarned", loot.value);
+        } else {
+          const goldValue = Math.floor(loot.value * 0.5);
+          state.gold += goldValue;
+          addQuestProgress("loot", 1);
+          addQuestProgress("goldEarned", goldValue);
           state.comboText = loot.icon === 3 ? "EPIC LOOT!" : "ITEM DROP!";
           state.comboTime = 0.9;
         }
@@ -1558,11 +1864,14 @@ function drawBar(x, y, w, h, v, max, fill, back = "rgba(0,0,0,.45)") {
 
 function drawAtlas(img, index, frameW, frameH, x, y, w, h) {
   if (!img.complete || img.naturalWidth <= 0) return false;
-  if ((index + 1) * frameW > img.naturalWidth) return false;
-  const sx = index * frameW + SPRITE_BLEED;
-  const sy = SPRITE_BLEED;
-  const sw = frameW - SPRITE_BLEED * 2;
-  const sh = frameH - SPRITE_BLEED * 2;
+  const sxScale = img.logicalWidth ? img.naturalWidth / img.logicalWidth : 1;
+  const syScale = img.logicalHeight ? img.naturalHeight / img.logicalHeight : sxScale;
+  const logicalWidth = img.logicalWidth || img.naturalWidth;
+  if ((index + 1) * frameW > logicalWidth) return false;
+  const sx = (index * frameW + SPRITE_BLEED) * sxScale;
+  const sy = SPRITE_BLEED * syScale;
+  const sw = (frameW - SPRITE_BLEED * 2) * sxScale;
+  const sh = (frameH - SPRITE_BLEED * 2) * syScale;
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   return true;
 }
@@ -1607,16 +1916,54 @@ function drawCombatFx(index, x, y, size, rotation = 0, alpha = 1, scaleY = 1) {
   if (!img.complete || img.naturalWidth <= 0) return false;
   const frameW = 256;
   const frameH = 256;
-  const sx = (index % 8) * frameW + SPRITE_BLEED;
-  const sy = SPRITE_BLEED;
-  const sw = frameW - SPRITE_BLEED * 2;
-  const sh = frameH - SPRITE_BLEED * 2;
+  const sxScale = img.logicalWidth ? img.naturalWidth / img.logicalWidth : 1;
+  const syScale = img.logicalHeight ? img.naturalHeight / img.logicalHeight : sxScale;
+  const sx = ((index % 8) * frameW + SPRITE_BLEED) * sxScale;
+  const sy = SPRITE_BLEED * syScale;
+  const sw = (frameW - SPRITE_BLEED * 2) * sxScale;
+  const sh = (frameH - SPRITE_BLEED * 2) * syScale;
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(rotation);
   ctx.globalCompositeOperation = "source-over";
   ctx.globalAlpha = alpha * 0.74;
   ctx.drawImage(img, sx, sy, sw, sh, -size / 2, (-size * scaleY) / 2, size, size * scaleY);
+  ctx.restore();
+  return true;
+}
+
+function drawImageRect(img, src, x, y, w, h, alpha = 1, logicalSize = 1254) {
+  if (!img.complete || img.naturalWidth <= 0 || !src) return false;
+  const sxScale = img.naturalWidth / logicalSize;
+  const syScale = img.naturalHeight / logicalSize;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.drawImage(img, src[0] * sxScale, src[1] * syScale, src[2] * sxScale, src[3] * syScale, x, y, w, h);
+  ctx.restore();
+  return true;
+}
+
+function drawImageCover(img, x, y, w, h, alpha = 1) {
+  if (!img.complete || img.naturalWidth <= 0) return false;
+  const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+  const sw = w / scale;
+  const sh = h / scale;
+  const sx = (img.naturalWidth - sw) * 0.5;
+  const sy = (img.naturalHeight - sh) * 0.5;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  ctx.restore();
+  return true;
+}
+
+function drawLogicalSubImage(img, sx, sy, sw, sh, dx, dy, dw, dh, alpha = 1) {
+  if (!img.complete || img.naturalWidth <= 0) return false;
+  const sxScale = img.logicalWidth ? img.naturalWidth / img.logicalWidth : 1;
+  const syScale = img.logicalHeight ? img.naturalHeight / img.logicalHeight : sxScale;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.drawImage(img, sx * sxScale, sy * syScale, sw * sxScale, sh * syScale, dx, dy, dw, dh);
   ctx.restore();
   return true;
 }
@@ -2868,7 +3215,7 @@ function drawHazard(h) {
       ctx.shadowColor = palette[1];
       drawCombatFx(1, h.x, h.y - 86, 230, 0, a * 0.78, 1.15);
       if (sprites.elementFx.complete) {
-        ctx.drawImage(sprites.elementFx, 0, 0, 256, 256, h.x - 42, h.y - 220, 84, 240);
+        drawLogicalSubImage(sprites.elementFx, 0, 0, 256, 256, h.x - 42, h.y - 220, 84, 240);
       }
       palette.forEach((color, i) => {
         ctx.strokeStyle = color;
@@ -2922,7 +3269,7 @@ function drawHazard(h) {
       ctx.shadowColor = palette[0];
       drawCombatFx(3, h.x, h.y - 42 * scale, 185 * scale, state.t * 0.08, a * 0.74, 1.1);
       if (sprites.elementFx.complete) {
-        ctx.drawImage(sprites.elementFx, 256, 0, 256, 256, h.x - 62 * scale, h.y - 140 * scale, 124 * scale, 170 * scale);
+        drawLogicalSubImage(sprites.elementFx, 256, 0, 256, 256, h.x - 62 * scale, h.y - 140 * scale, 124 * scale, 170 * scale);
       }
       const g = ctx.createRadialGradient(h.x, h.y, 8, h.x, h.y, 88 * scale);
       g.addColorStop(0, `rgba(255,255,220,${a * 0.7})`);
@@ -3248,10 +3595,12 @@ function drawGamePanel() {
   ctx.textAlign = "left";
   ctx.fillStyle = "#fff5d7";
   ctx.font = "900 24px Segoe UI";
-  ctx.fillText(state.panel === "inventory" ? "Inventory" : "Skill Codex", x + 34, y + 52);
+  const panelTitle = state.panel === "inventory" ? "Inventory" : state.panel === "quests" ? "Quest Board" : "Skill Codex";
+  const panelSub = state.panel === "inventory" ? "Legend gear loadout" : state.panel === "quests" ? "Rift contracts and raid orders" : "Auto battle rotation";
+  drawFitText(panelTitle, x + 34, y + 52, w - 120, { maxSize: 24, minSize: 16, weight: "900", color: "#fff5d7" });
   ctx.font = "800 12px Segoe UI";
   ctx.fillStyle = "#8dfffb";
-  ctx.fillText(state.panel === "inventory" ? "Legend gear loadout" : "Auto battle rotation", x + 36, y + 76);
+  drawFitText(panelSub, x + 36, y + 76, w - 120, { maxSize: 12, minSize: 9, weight: "800", color: "#8dfffb" });
 
   ctx.textAlign = "center";
   drawUiTile(8, x + w - 60, y + 22, 42, 42, 0.9);
@@ -3274,18 +3623,18 @@ function drawGamePanel() {
       ctx.textAlign = "center";
       ctx.fillStyle = "#fff5d7";
       ctx.font = "800 10px Segoe UI";
-      ctx.fillText(item.name, ix + 35, iy + 89);
+      drawFitText(item.name, ix + 35, iy + 89, 76, { maxSize: 10, minSize: 7, weight: "800", align: "center", color: "#fff5d7" });
       ctx.fillStyle = item.rarity;
-      ctx.fillText(item.power, ix + 35, iy + 104);
+      drawFitText(item.power, ix + 35, iy + 104, 76, { maxSize: 10, minSize: 7, weight: "800", align: "center", color: item.rarity });
     });
     ctx.textAlign = "left";
     drawUiFrame(6, x + 30, y + 336, w - 60, 154, 0.9, 42);
     ctx.fillStyle = "#fff5d7";
     ctx.font = "900 16px Segoe UI";
-    ctx.fillText("Main Quest: Serpent Core", x + 54, y + 374);
+    drawFitText("Main Quest: Serpent Core", x + 54, y + 374, w - 108, { maxSize: 16, minSize: 11, weight: "900", color: "#fff5d7" });
     ctx.font = "700 12px Segoe UI";
     ctx.fillStyle = "#bdfbed";
-    ctx.fillText(`${state.collectedFragments.length}/5 core fragments collected`, x + 54, y + 396);
+    drawFitText(`${state.collectedFragments.length}/5 core fragments collected`, x + 54, y + 396, w - 108, { maxSize: 12, minSize: 9, weight: "700", color: "#bdfbed" });
     coreFragments.forEach((fragment, i) => {
       const fx = x + 54 + i * 62;
       const fy = y + 418;
@@ -3299,6 +3648,32 @@ function drawGamePanel() {
       ctx.globalAlpha = owned ? 1 : 0.32;
       drawAtlas(sprites.itemIcons, fragment.icon, 72, 72, fx + 8, fy + 4, 28, 28);
       ctx.globalAlpha = 1;
+    });
+  } else if (state.panel === "quests") {
+    questDefinitions.forEach((quest, i) => {
+      const qx = x + 34;
+      const qy = y + 104 + i * 50;
+      const done = state.completedQuests.includes(quest.id);
+      const progress = questProgress(quest);
+      const ratio = quest.target ? progress / quest.target : 0;
+      drawUiFrame(done ? 12 : 7, qx - 4, qy - 4, w - 68, 46, done ? 0.54 : 0.72, 30);
+      ctx.fillStyle = done ? "rgba(255,255,255,.32)" : quest.color;
+      ctx.font = "900 8px Segoe UI";
+      ctx.textAlign = "left";
+      drawFitText(done ? "DONE" : quest.kind, qx + 8, qy + 12, 46, { maxSize: 8, minSize: 7, weight: "900", color: done ? "rgba(255,255,255,.32)" : quest.color });
+      ctx.fillStyle = done ? "rgba(255,255,255,.62)" : "#fff5d7";
+      ctx.font = "900 12px Segoe UI";
+      drawFitText(quest.title, qx + 58, qy + 12, w - 190, { maxSize: 12, minSize: 8, weight: "900", color: done ? "rgba(255,255,255,.62)" : "#fff5d7" });
+      ctx.fillStyle = "rgba(189,251,237,.84)";
+      ctx.font = "800 9px Segoe UI";
+      drawFitText(quest.desc, qx + 58, qy + 27, w - 190, { maxSize: 9, minSize: 7, weight: "800", color: "rgba(189,251,237,.84)" });
+      drawBar(qx + 8, qy + 31, w - 104, 5, ratio, 1, done ? "#ffffff" : quest.color, "rgba(255,255,255,.12)");
+      ctx.textAlign = "right";
+      ctx.fillStyle = done ? "#ffffff" : quest.color;
+      ctx.font = "900 9px Segoe UI";
+      ctx.fillText(`${progress}/${quest.target}`, x + w - 52, qy + 12);
+      ctx.fillStyle = "#ffd965";
+      ctx.fillText(`${quest.rewardGold}G / ${quest.rewardExp}EXP`, x + w - 52, qy + 29);
     });
   } else {
     skills.forEach((skill, i) => {
@@ -3338,10 +3713,10 @@ function drawGamePanel() {
       ctx.textAlign = "left";
       ctx.fillStyle = "#fff5d7";
       ctx.font = "900 13px Segoe UI";
-      ctx.fillText(skill.name, sx + 64, sy + 19);
+      drawFitText(skill.name, sx + 64, sy + 19, w - 242, { maxSize: 13, minSize: 9, weight: "900", color: "#fff5d7" });
       ctx.fillStyle = "#bdfbed";
       ctx.font = "800 10px Segoe UI";
-      ctx.fillText(`AUTO  /  ${skill.maxCd.toFixed(1)}s  /  MP ${skill.cost}`, sx + 64, sy + 36);
+      drawFitText(`AUTO  /  ${skill.maxCd.toFixed(1)}s  /  MP ${skill.cost}`, sx + 64, sy + 36, w - 242, { maxSize: 10, minSize: 7, weight: "800", color: "#bdfbed" });
       drawBar(sx + w - 186, sy + 18, 88, 7, skill.maxCd - skill.cd, skill.maxCd, skill.color, "rgba(255,255,255,.13)");
       ctx.textAlign = "right";
       ctx.fillStyle = ready ? skill.color : "rgba(255,255,255,.4)";
@@ -3406,6 +3781,299 @@ function drawRaidOverlay() {
   ctx.restore();
 }
 
+function drawQuestTracker() {
+  const quests = visibleQuests();
+  if (!quests.length) return;
+  const x = 13;
+  const y = 102;
+  const w = 206;
+  const rowH = 42;
+  const h = 34 + quests.length * rowH;
+  ctx.save();
+  const pulse = state.questPulse > 0 ? Math.sin(state.t * 24) * state.questPulse * 0.08 : 0;
+  drawUiFrame(6, x, y, w, h, 0.72 + pulse, 32);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#fff5d7";
+  ctx.font = "900 10px Segoe UI";
+  ctx.fillText("QUEST BOARD", x + 16, y + 23);
+  quests.forEach((quest, i) => {
+    const qy = y + 36 + i * rowH;
+    const progress = questProgress(quest);
+    const ratio = quest.target ? progress / quest.target : 0;
+    ctx.fillStyle = hexAlpha(quest.color, 0.13);
+    roundRect(x + 12, qy - 4, w - 24, 34, 8);
+    ctx.fill();
+    ctx.fillStyle = quest.color;
+    ctx.font = "900 8px Segoe UI";
+    ctx.fillText(quest.kind, x + 20, qy + 7);
+    ctx.fillStyle = "#fff5d7";
+    ctx.font = "900 10px Segoe UI";
+    ctx.fillText(quest.title, x + 58, qy + 7);
+    ctx.fillStyle = "rgba(189,251,237,.9)";
+    ctx.font = "800 9px Segoe UI";
+    ctx.fillText(`${progress}/${quest.target}`, x + 20, qy + 22);
+    drawBar(x + 58, qy + 16, w - 90, 6, ratio, 1, quest.color, "rgba(255,255,255,.12)");
+  });
+  ctx.restore();
+}
+
+function drawQuestToast() {
+  if (state.questToastTime <= 0 || !state.questToast) return;
+  const a = clamp(state.questToastTime, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = a;
+  const w = W - 72;
+  const x = 36;
+  const y = 188 - (1 - a) * 16;
+  drawUiFrame(11, x, y, w, 64, 0.94, 34);
+  ctx.textAlign = "center";
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = "#ffd965";
+  ctx.fillStyle = "#fff5d7";
+  ctx.font = "900 15px Segoe UI";
+  ctx.fillText("QUEST COMPLETE", W / 2, y + 25);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#8dfffb";
+  ctx.font = "800 11px Segoe UI";
+  ctx.fillText(state.questToast, W / 2, y + 45);
+  ctx.restore();
+}
+
+function drawTownBuilding(building) {
+  const pulse = 0.5 + Math.sin(state.t * 3 + building.x * 0.02) * 0.12;
+  ctx.save();
+  const cx = building.x + building.w * 0.5;
+  const cy = building.y + building.h * 0.5;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = 0.28 + pulse * 0.12;
+  ctx.fillStyle = building.color;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 14, 42, 14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  drawUiTile(8, cx - 22, cy - 28, 44, 44, 0.92);
+  drawAtlas(sprites.itemIcons, building.icon, 72, 72, cx - 14, cy - 20, 28, 28);
+  const labelW = 108;
+  const labelH = 38;
+  const labelX = cx - labelW * 0.5;
+  const labelY = cy + 18;
+  drawUiFrame(13, labelX, labelY, labelW, labelH, 0.9, 22);
+  ctx.fillStyle = "rgba(0,0,0,.56)";
+  roundRect(labelX + 7, labelY + 7, labelW - 14, labelH - 12, 8);
+  ctx.fill();
+  ctx.textAlign = "center";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(0,0,0,.82)";
+  ctx.shadowBlur = 8;
+  ctx.shadowColor = "rgba(0,0,0,.9)";
+  ctx.fillStyle = "#fff5d7";
+  ctx.font = "900 10px Segoe UI";
+  drawFitText(building.name, cx, labelY + 16, labelW - 18, { maxSize: 10, minSize: 7, weight: "900", align: "center", color: "#fff5d7" });
+  ctx.fillStyle = hexAlpha(building.color, 0.95);
+  ctx.font = "800 8px Segoe UI";
+  drawFitText(building.sub, cx, labelY + 29, labelW - 18, { maxSize: 8, minSize: 6, weight: "800", align: "center", color: hexAlpha(building.color, 0.95) });
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawTownPanel() {
+  if (!state.townPanel) return;
+  const building = townBuildings.find((b) => b.id === state.townPanel);
+  if (!building) return;
+  const x = 26;
+  const y = 154;
+  const w = W - 52;
+  const h = 594;
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,.38)";
+  ctx.fillRect(0, 0, W, H);
+  const panelRect = state.townPanel === "guild" ? townUiRects.questPanel : townUiRects.shopPanel;
+  if (!drawImageRect(sprites.townUi, panelRect, x - 10, y - 12, w + 20, h + 24, 0.96)) {
+    drawUiFrame(0, x, y, w, h, 0.97, 48);
+    ctx.fillStyle = "rgba(0,8,12,.36)";
+    roundRect(x + 18, y + 22, w - 36, h - 44, 18);
+    ctx.fill();
+  }
+  ctx.textAlign = "left";
+  ctx.fillStyle = building.color;
+  ctx.font = "900 12px Segoe UI";
+  drawFitText("RIFT TOWN", x + 34, y + 38, w - 132, { maxSize: 12, minSize: 9, weight: "900", color: building.color });
+  ctx.fillStyle = "#fff5d7";
+  ctx.font = "900 24px Segoe UI";
+  drawFitText(building.title || building.name, x + 34, y + 68, w - 132, { maxSize: 24, minSize: 14, weight: "900", color: "#fff5d7" });
+  ctx.fillStyle = "#8dfffb";
+  ctx.font = "800 12px Segoe UI";
+  drawFitText(building.sub, x + 36, y + 92, w - 132, { maxSize: 12, minSize: 8, weight: "800", color: "#8dfffb" });
+  drawImageRect(sprites.townUi, townUiRects.close, x + w - 64, y + 18, 50, 50, 0.94) || drawUiTile(8, x + w - 60, y + 22, 42, 42, 0.9);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff5d7";
+  ctx.font = "900 18px Segoe UI";
+  ctx.fillText("X", x + w - 39, y + 50);
+
+  if (state.townPanel === "gate") {
+    ctx.fillStyle = "rgba(0,0,0,.5)";
+    roundRect(x + 38, y + 122, w - 76, 92, 14);
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#fff5d7";
+    ctx.font = "900 18px Segoe UI";
+    ctx.fillText(`현재 ${stageCode()} / ${currentStage().name}`, W / 2, y + 150);
+    ctx.fillStyle = "rgba(189,251,237,.9)";
+    ctx.font = "800 12px Segoe UI";
+    ctx.fillText("던전에 입장하면 자동 전투, 파티 보조, 퀘스트 진행이 시작됩니다.", W / 2, y + 178);
+    ctx.fillStyle = "rgba(0,0,0,.58)";
+    roundRect(x + 50, y + 132, w - 100, 62, 12);
+    ctx.fill();
+    drawFitText(`현재 ${stageCode()} / ${currentStage().name}`, W / 2, y + 152, w - 112, { maxSize: 18, minSize: 11, weight: "900", align: "center", color: "#fff5d7" });
+    ctx.font = "800 12px Segoe UI";
+    drawWrappedText("던전에 입장하면 자동 전투, 파티 보조, 퀘스트 진행이 시작됩니다.", W / 2, y + 175, w - 118, 15, 2, { align: "center", color: "rgba(189,251,237,.9)" });
+    drawImageRect(sprites.townUi, townUiRects.gateButton, x + 52, y + 216, w - 104, 96, 0.98) || drawUiFrame(15, x + 60, y + 226, w - 120, 74, 0.95, 36);
+    ctx.fillStyle = "#ff7184";
+    ctx.font = "900 20px Segoe UI";
+    ctx.fillText("DUNGEON START", W / 2, y + 270);
+  } else if (state.townPanel === "guild") {
+    townContracts.forEach((contract, i) => {
+      const cy = y + 122 + i * 92;
+      const active = state.townContracts.includes(contract.id);
+      const progress = contractProgress(contract);
+      drawImageRect(sprites.townUi, townUiRects.contractCard, x + 22, cy - 8, w - 44, 92, active ? 0.72 : 0.9) || drawUiFrame(active ? 12 : 7, x + 28, cy, w - 56, 76, active ? 0.62 : 0.78, 34);
+      ctx.fillStyle = "rgba(0,0,0,.42)";
+      roundRect(x + 42, cy + 10, w - 128, 50, 10);
+      ctx.fill();
+      ctx.textAlign = "left";
+      ctx.fillStyle = contract.color;
+      ctx.font = "900 10px Segoe UI";
+      drawFitText(active ? "ACTIVE" : "NOTICE", x + 48, cy + 19, 52, { maxSize: 10, minSize: 8, weight: "900", color: contract.color });
+      ctx.fillStyle = "#fff5d7";
+      ctx.font = "900 12px Segoe UI";
+      drawFitText(contract.name, x + 106, cy + 19, w - 208, { maxSize: 12, minSize: 8, weight: "900", color: "#fff5d7" });
+      ctx.fillStyle = "rgba(189,251,237,.88)";
+      ctx.font = "800 9px Segoe UI";
+      drawFitText(`${contract.desc}  ${progress}/${contract.target}`, x + 48, cy + 40, w - 154, { maxSize: 9, minSize: 7, weight: "800", color: "rgba(189,251,237,.88)" });
+      drawBar(x + 48, cy + 53, w - 160, 6, progress, contract.target, contract.color, "rgba(255,255,255,.12)");
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#ffd965";
+      ctx.font = "900 9px Segoe UI";
+      ctx.fillText(`${contract.rewardGold}G / ${contract.rewardExp}EXP`, x + w - 48, cy + 60);
+    });
+  } else {
+    const items = townShopItems[state.townPanel] || [];
+    items.forEach((item, i) => {
+      const iy = y + 128 + i * 108;
+      const cardX = x + 36;
+      const cardW = w - 72;
+      const textX = cardX + 88;
+      const priceX = cardX + cardW - 24;
+      const level = state.townUpgrades[item.levelKey] || 0;
+      const price = Math.floor(item.cost * (1 + level * 0.62));
+      const maxed = level >= item.max;
+      drawImageRect(sprites.townUi, townUiRects.shopCard, cardX - 8, iy - 10, cardW + 16, 104, maxed ? 0.62 : 0.92) || drawUiFrame(maxed ? 12 : 7, cardX, iy, cardW, 86, maxed ? 0.58 : 0.78, 34);
+      ctx.fillStyle = "rgba(0,0,0,.5)";
+      roundRect(cardX + 78, iy + 12, cardW - 170, 48, 10);
+      ctx.fill();
+      ctx.textAlign = "left";
+      ctx.fillStyle = maxed ? "rgba(255,255,255,.56)" : building.color;
+      ctx.font = "900 10px Segoe UI";
+      drawFitText(maxed ? "MAX" : `LV ${level}/${item.max}`, cardX + 10, iy + 23, 64, { maxSize: 10, minSize: 8, weight: "900", color: maxed ? "rgba(255,255,255,.56)" : building.color });
+      ctx.fillStyle = "#fff5d7";
+      ctx.font = "900 13px Segoe UI";
+      drawFitText(item.name, textX, iy + 25, priceX - textX - 72, { maxSize: 13, minSize: 8, weight: "900", color: "#fff5d7" });
+      ctx.fillStyle = "rgba(189,251,237,.9)";
+      ctx.font = "800 10px Segoe UI";
+      drawFitText(item.desc, textX, iy + 46, priceX - textX - 72, { maxSize: 10, minSize: 7, weight: "800", color: "rgba(189,251,237,.9)" });
+      ctx.textAlign = "right";
+      ctx.fillStyle = maxed ? "rgba(255,255,255,.5)" : "#ffd965";
+      ctx.font = "900 10px Segoe UI";
+      drawFitText(maxed ? "DONE" : `${price} GOLD`, priceX, iy + 50, 70, { maxSize: 10, minSize: 7, weight: "900", align: "right", color: maxed ? "rgba(255,255,255,.5)" : "#ffd965" });
+    });
+  }
+  ctx.restore();
+}
+
+function drawTownScreen() {
+  const t = state.t;
+  ctx.save();
+  if (sprites.townMap.complete && sprites.townMap.naturalWidth > 0) {
+    drawImageCover(sprites.townMap, 0, 0, W, H);
+    const townShade = ctx.createLinearGradient(0, 0, 0, H);
+    townShade.addColorStop(0, "rgba(0,8,18,.18)");
+    townShade.addColorStop(0.52, "rgba(0,0,0,.04)");
+    townShade.addColorStop(1, "rgba(0,0,0,.22)");
+    ctx.fillStyle = townShade;
+    ctx.fillRect(0, 0, W, H);
+  } else {
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#071726");
+    sky.addColorStop(0.44, "#12353b");
+    sky.addColorStop(1, "#071015");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 36; i += 1) {
+    const p = (i * 0.137 + t * 0.018) % 1;
+    const x = (i * 73) % W;
+    const y = 34 + p * 172;
+    ctx.fillStyle = `rgba(141,255,251,${0.06 + (1 - p) * 0.06})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 1.2 + (i % 3), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = "source-over";
+  const plaza = ctx.createRadialGradient(W / 2, H * 0.82, 20, W / 2, H * 0.78, 360);
+  plaza.addColorStop(0, "rgba(255,226,150,.16)");
+  plaza.addColorStop(0.42, "rgba(47,70,60,.08)");
+  plaza.addColorStop(1, "rgba(7,13,18,.04)");
+  ctx.fillStyle = plaza;
+  ctx.fillRect(0, H * 0.18, W, H * 0.82);
+  ctx.strokeStyle = "rgba(255,245,210,.12)";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 8; i += 1) {
+    ctx.beginPath();
+    ctx.ellipse(W / 2, H * 0.78, 84 + i * 36, 28 + i * 14, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.textAlign = "center";
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = "#8dfffb";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 26px Segoe UI";
+  ctx.fillText("RIFT TOWN", W / 2, 58);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(189,251,237,.88)";
+  ctx.font = "800 12px Segoe UI";
+  ctx.fillText("무기점 · 펫샵 · 파트너 홀 · 의뢰소 · 던전 게이트", W / 2, 82);
+  drawUiFrame(1, 18, 104, W - 36, 58, 0.76, 30);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#fff5d7";
+  ctx.font = "900 13px Segoe UI";
+  ctx.fillText(`Gold ${state.gold}`, 36, 127);
+  ctx.fillStyle = "#8dfffb";
+  ctx.font = "900 12px Segoe UI";
+  ctx.fillText(`ATK ${player.atk}   SPD ${Math.floor(player.speed)}   Party ${state.townUpgrades.party}`, 36, 148);
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#ffd965";
+  ctx.font = "900 13px Segoe UI";
+  ctx.fillText(`Stage ${stageCode()}`, W - 36, 127);
+  ctx.fillStyle = "rgba(255,255,255,.82)";
+  ctx.font = "900 12px Segoe UI";
+  ctx.fillText(`Contracts ${state.townContracts.length}`, W - 36, 148);
+  townBuildings.forEach(drawTownBuilding);
+  if (state.townMessageTime > 0) {
+    ctx.globalAlpha = clamp(state.townMessageTime, 0, 1);
+    drawUiFrame(11, 42, H - 112, W - 84, 58, 0.88, 30);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#fff5d7";
+    ctx.font = "900 15px Segoe UI";
+    ctx.fillText(state.townMessage, W / 2, H - 76);
+    ctx.globalAlpha = 1;
+  }
+  drawTownPanel();
+  drawQuestToast();
+  ctx.restore();
+}
+
 function drawUi() {
   ctx.save();
   if (!drawUiFrame(1, 10, 10, 224, 82, 0.92, 38)) {
@@ -3444,18 +4112,8 @@ function drawUi() {
   }
 
   const activeBoss = enemies.some((e) => e.kind === "boss");
-  if (!activeBoss) {
-    const quest = nextQuestFragment();
-    ctx.textAlign = "left";
-    drawUiFrame(6, 13, 102, 188, 60, 0.74, 32);
-    ctx.fillStyle = quest ? quest.color : "#fff2a5";
-    ctx.font = "900 10px Segoe UI";
-    ctx.fillText("MAIN QUEST", 30, 125);
-    ctx.fillStyle = "#fff5d7";
-    ctx.font = "800 10px Segoe UI";
-    ctx.fillText(quest ? `${state.collectedFragments.length}/5 코어 파편 수집` : "세르펜트 코어 완성", 30, 141);
-    ctx.fillStyle = "rgba(189,251,237,.88)";
-    ctx.fillText(quest ? `목표: ${quest.boss}` : "리프트 봉인 준비 완료", 30, 153);
+  if (!activeBoss && state.stageIntro <= 0.2) {
+    drawQuestTracker();
   }
 
   if (activeBoss) {
@@ -3493,9 +4151,10 @@ function drawUi() {
     ctx.fillText(`${Math.ceil(hpRatio * 100)}%`, W - 38, 130);
   }
 
+  const compactIntro = state.stageIntro > 0.2 || state.raidIntro > 0.2;
   const baseX = W - 52;
   const baseY = 256;
-  skills.forEach((s, i) => {
+  if (!compactIntro) skills.forEach((s, i) => {
     const y = baseY + i * 50;
     const ready = s.cd <= 0 && player.mp >= s.cost;
     ctx.save();
@@ -3561,15 +4220,21 @@ function drawUi() {
 
   ctx.textAlign = "center";
   [
-    { id: "bag", x: W - 92, y: 146, icon: 0, active: state.panel === "inventory" },
-    { id: "skill", x: W - 42, y: 146, icon: 5, active: state.panel === "skills" },
+    { id: "town", x: W - 192, y: 146, icon: 7, active: false, label: "T" },
+    { id: "quest", x: W - 142, y: 146, icon: 6, active: state.panel === "quests", label: "Q" },
+    { id: "bag", x: W - 92, y: 146, icon: 0, active: state.panel === "inventory", label: "I" },
+    { id: "skill", x: W - 42, y: 146, icon: 5, active: state.panel === "skills", label: "S" },
   ].forEach((b) => {
     drawUiTile(8, b.x - 23, b.y - 23, 46, 46, b.active ? 1 : 0.72);
     drawAtlas(sprites.itemIcons, b.icon, 72, 72, b.x - 15, b.y - 15, 30, 30);
+    ctx.fillStyle = "#fff5d7";
+    ctx.font = "900 8px Segoe UI";
+    ctx.fillText(b.label, b.x, b.y + 24);
   });
 
   const mountX = W - 42;
   const mountY = 204;
+  if (!compactIntro) {
   drawUiTile(8, mountX - 24, mountY - 24, 48, 48, player.mounted ? 1 : 0.72);
   ctx.globalCompositeOperation = "lighter";
   ctx.strokeStyle = pet.color;
@@ -3593,23 +4258,25 @@ function drawUi() {
   ctx.fillStyle = "#fff5d7";
   ctx.font = "900 9px Segoe UI";
   ctx.fillText("R", mountX, mountY + 23);
+  }
 
+  if (!compactIntro) {
   ctx.textAlign = "left";
-  const partyPanelY = H - 116;
-  if (!drawUiFrame(7, 12, partyPanelY, 336, 88, 0.86, 34)) {
+  const partyPanelY = H - 104;
+  if (!drawUiFrame(7, 10, partyPanelY, 410, 92, 0.86, 34)) {
     ctx.fillStyle = "rgba(4, 10, 8, .62)";
-    roundRect(18, partyPanelY + 6, 324, 72, 13);
+    roundRect(16, partyPanelY + 6, 398, 76, 13);
     ctx.fill();
   }
   ctx.fillStyle = "#fff5d7";
   ctx.font = "900 10px Segoe UI";
   ctx.fillText("PARTY ROLES", 28, partyPanelY + 22);
   [...partyMembers, pet].forEach((unit, i) => {
-    const x = 24 + i * 78;
-    const y = partyPanelY + 54;
+    const x = 22 + i * 99;
+    const y = partyPanelY + 57;
     const readyRatio = clamp(1 - (unit.specialCd || 0) / (unit.maxSpecialCd || unit.maxCd), 0, 1);
     ctx.textAlign = "left";
-    drawUiFrame(7, x - 2, y - 24, 74, 58, 0.58, 26);
+    drawUiFrame(7, x - 2, y - 24, 94, 60, 0.58, 26);
     const iconX = x + 18;
     ctx.fillStyle = hexAlpha(unit.color, 0.18);
     ctx.strokeStyle = unit.color;
@@ -3634,27 +4301,28 @@ function drawUi() {
     ctx.font = "900 8px Segoe UI";
     ctx.fillText(unit.role, x + 34, y - 7);
     ctx.fillStyle = "#fff5d7";
-    ctx.font = "800 6.5px Segoe UI";
+    ctx.font = "800 6px Segoe UI";
     ctx.fillText(unit.skillName || "Assist", x + 34, y + 7);
   });
   if (state.partyBarrier > 0) {
-    drawBar(24, partyPanelY + 77, 100, 5, state.partyBarrier, 2.1, "#ffd965", "rgba(255,255,255,.12)");
+    drawBar(24, partyPanelY + 80, 120, 5, state.partyBarrier, 2.1, "#ffd965", "rgba(255,255,255,.12)");
   }
 
   ctx.textAlign = "left";
-  drawUiFrame(7, 10, H - 184, 184, 52, 0.72, 28);
+  drawUiFrame(7, 10, H - 168, 184, 48, 0.72, 28);
   ctx.fillStyle = "#fff5d7";
   ctx.font = "800 13px Segoe UI";
-  ctx.fillText("Auto Skills ON", 24, H - 154);
+  ctx.fillText("Auto Skills ON", 24, H - 140);
   ctx.fillStyle = "#83ffd5";
-  ctx.fillText(`${state.score.toLocaleString()} pts`, 116, H - 154);
+  ctx.fillText(`${state.score.toLocaleString()} pts`, 116, H - 140);
 
-  drawUiFrame(13, 206, H - 184, 158, 52, 0.62, 26);
-  drawBar(220, H - 158, 128, 8, state.ultimateCharge, 100, "#ffffff", "rgba(255,255,255,.14)");
+  drawUiFrame(13, 206, H - 168, 158, 48, 0.62, 26);
+  drawBar(220, H - 142, 128, 8, state.ultimateCharge, 100, "#ffffff", "rgba(255,255,255,.14)");
   ctx.textAlign = "center";
   ctx.fillStyle = "#fff5d7";
   ctx.font = "800 11px Segoe UI";
-  ctx.fillText("OVERDRIVE", 284, H - 166);
+  ctx.fillText("OVERDRIVE", 284, H - 150);
+  }
 
   const joyAlpha = input.joyActive ? 0.78 : 0.34;
   ctx.globalAlpha = joyAlpha;
@@ -3719,7 +4387,7 @@ function startGame() {
 }
 
 function beginPlay() {
-  state.screen = "play";
+  state.screen = "town";
   state.message = "ENTER THE RIFT";
   state.messageTime = 1.8;
   state.stageIntro = 2.2;
@@ -3735,6 +4403,8 @@ function beginPlay() {
   pet.x = player.x - 18;
   pet.y = player.y - 52;
   pet.cd = Math.min(pet.cd, 0.35);
+  state.townMessage = "Rift Town에 도착했다";
+  state.townMessageTime = 2.4;
 }
 
 function advanceIntro() {
@@ -3864,7 +4534,7 @@ function drawTitleScreen() {
 function wrapDialogue(text, maxWidth) {
   const lines = [];
   let line = "";
-  for (const ch of text) {
+  for (const ch of String(text ?? "")) {
     const next = line + ch;
     if (ctx.measureText(next).width > maxWidth && line) {
       lines.push(line);
@@ -3875,6 +4545,58 @@ function wrapDialogue(text, maxWidth) {
   }
   if (line) lines.push(line);
   return lines;
+}
+
+function ellipsizeText(text, maxWidth) {
+  const source = String(text ?? "");
+  if (ctx.measureText(source).width <= maxWidth) return source;
+  const suffix = "...";
+  let out = source;
+  while (out.length > 0 && ctx.measureText(out + suffix).width > maxWidth) {
+    out = out.slice(0, -1);
+  }
+  return out ? out + suffix : suffix;
+}
+
+function drawFitText(text, x, y, maxWidth, options = {}) {
+  const {
+    minSize = 8,
+    maxSize = 12,
+    weight = "800",
+    family = "Segoe UI",
+    align = "left",
+    color = null,
+    baseline = "alphabetic",
+  } = options;
+  let size = maxSize;
+  const source = String(text ?? "");
+  while (size > minSize) {
+    ctx.font = `${weight} ${size}px ${family}`;
+    if (ctx.measureText(source).width <= maxWidth) break;
+    size -= 1;
+  }
+  ctx.font = `${weight} ${size}px ${family}`;
+  ctx.textAlign = align;
+  ctx.textBaseline = baseline;
+  if (color) ctx.fillStyle = color;
+  ctx.fillText(ellipsizeText(source, maxWidth), x, y);
+}
+
+function fitLinesToBox(text, maxWidth, maxLines) {
+  const lines = wrapDialogue(text, maxWidth);
+  if (lines.length <= maxLines) return lines;
+  const safeLines = lines.slice(0, maxLines);
+  safeLines[maxLines - 1] = ellipsizeText(safeLines[maxLines - 1] + lines.slice(maxLines).join(""), maxWidth);
+  return safeLines;
+}
+
+function drawWrappedText(text, x, y, maxWidth, lineHeight, maxLines, options = {}) {
+  const { align = "left", color = null } = options;
+  ctx.textAlign = align;
+  if (color) ctx.fillStyle = color;
+  fitLinesToBox(text, maxWidth, maxLines).forEach((line, i) => {
+    ctx.fillText(line, x, y + i * lineHeight);
+  });
 }
 
 function drawAnimeIntro() {
@@ -3966,20 +4688,27 @@ function drawAnimeIntro() {
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 15px Segoe UI";
   ctx.textAlign = "center";
-  ctx.fillText(scene.speaker, nameX + 52, boxY);
+  drawFitText(scene.speaker, nameX + 52, boxY, 104, { maxSize: 15, minSize: 10, weight: "900", align: "center", color: "#ffffff" });
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#ffffff";
-  ctx.font = "800 18px Segoe UI";
+  ctx.font = "800 16px Segoe UI";
   const visible = Math.min(scene.line.length, Math.floor(state.introTime * 28));
   const text = visible >= scene.line.length ? scene.line : scene.line.slice(0, visible);
-  const lines = wrapDialogue(text, boxW - 54);
-  lines.slice(0, 3).forEach((line, i) => ctx.fillText(line, boxX + 28, boxY + 48 + i * 30));
+  const textX = boxX + 28;
+  const textY = boxY + 47;
+  const textW = boxW - 56;
+  const textH = 78;
+  ctx.save();
+  roundRect(textX - 4, textY - 19, textW + 8, textH + 10, 8);
+  ctx.clip();
+  drawWrappedText(text, textX, textY, textW, 24, 4, { align: "left", color: "#ffffff" });
+  ctx.restore();
 
   ctx.textAlign = "right";
   ctx.fillStyle = "rgba(255,255,255,.72)";
   ctx.font = "800 11px Segoe UI";
-  ctx.fillText("TAP / ENTER", boxX + boxW - 24, boxY + boxH - 18);
+  drawFitText("TAP / ENTER", boxX + boxW - 24, boxY + boxH - 18, 116, { maxSize: 11, minSize: 8, weight: "800", align: "right", color: "rgba(255,255,255,.72)" });
   ctx.restore();
 }
 
@@ -3996,13 +4725,16 @@ function resetCanvasState() {
 
 function draw() {
   resetCanvasState();
-  ctx.clearRect(0, 0, W, H);
   if (state.screen === "title") {
     drawTitleScreen();
     return;
   }
   if (state.screen === "intro") {
     drawAnimeIntro();
+    return;
+  }
+  if (state.screen === "town") {
+    drawTownScreen();
     return;
   }
   ctx.save();
@@ -4083,6 +4815,7 @@ function draw() {
   }
   drawRaidOverlay();
   drawUi();
+  drawQuestToast();
 }
 
 let last = performance.now();
@@ -4090,9 +4823,14 @@ function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
   try {
-    if (state.screen === "title" || state.screen === "intro") {
+    if (state.screen === "title" || state.screen === "intro" || state.screen === "town") {
       state.t += dt;
       if (state.screen === "intro") state.introTime += dt;
+      if (state.screen === "town") {
+        state.townMessageTime = Math.max(0, state.townMessageTime - dt);
+        state.questToastTime = Math.max(0, state.questToastTime - dt);
+        state.questPulse = Math.max(0, state.questPulse - dt * 1.8);
+      }
     }
     else if (!state.paused) update(dt);
     draw();
@@ -4133,6 +4871,47 @@ function resetJoystick() {
   input.moveY = 0;
 }
 
+function handleTownPointer(p) {
+  if (state.townPanel) {
+    const panelX = 26;
+    const panelY = 154;
+    const panelW = W - 52;
+    if (p.x > panelX + panelW - 64 && p.x < panelX + panelW - 18 && p.y > panelY + 18 && p.y < panelY + 66) {
+      state.townPanel = null;
+      return;
+    }
+    if (state.townPanel === "gate") {
+      if (p.x > panelX + 60 && p.x < panelX + panelW - 60 && p.y > panelY + 226 && p.y < panelY + 300) enterDungeon();
+      return;
+    }
+    if (state.townPanel === "guild") {
+      townContracts.forEach((contract, i) => {
+        const cy = panelY + 122 + i * 92;
+        if (p.x > panelX + 28 && p.x < panelX + panelW - 28 && p.y > cy && p.y < cy + 76) acceptTownContract(contract);
+      });
+      return;
+    }
+    const items = townShopItems[state.townPanel] || [];
+    items.forEach((item, i) => {
+      const iy = panelY + 128 + i * 108;
+      if (p.x > panelX + 32 && p.x < panelX + panelW - 32 && p.y > iy && p.y < iy + 86) buyTownItem(item);
+    });
+    return;
+  }
+  for (const building of townBuildings) {
+    if (p.x > building.x && p.x < building.x + building.w && p.y > building.y && p.y < building.y + building.h) {
+      if (building.id === "gate") {
+        state.townPanel = "gate";
+      } else {
+        state.townPanel = building.id;
+      }
+      state.townMessage = `${building.name} 방문`;
+      state.townMessageTime = 1.5;
+      return;
+    }
+  }
+}
+
 function handlePointer(ev) {
   ev.preventDefault();
   if (state.screen === "title") {
@@ -4141,6 +4920,11 @@ function handlePointer(ev) {
   }
   if (state.screen === "intro") {
     advanceIntro();
+    return;
+  }
+  if (state.screen === "town") {
+    ensureAudio();
+    handleTownPointer(canvasPoint(ev));
     return;
   }
   ensureAudio();
@@ -4154,8 +4938,13 @@ function handlePointer(ev) {
     }
     return;
   }
-  if (p.y > 122 && p.y < 170 && p.x > W - 118 && p.x < W - 18) {
-    state.panel = p.x < W - 66 ? "inventory" : "skills";
+  if (p.y > 122 && p.y < 170 && p.x > W - 218 && p.x < W - 168) {
+    enterTown("마을로 귀환했다");
+    input.down = false;
+    return;
+  }
+  if (p.y > 122 && p.y < 170 && p.x > W - 168 && p.x < W - 18) {
+    state.panel = p.x < W - 116 ? "quests" : p.x < W - 66 ? "inventory" : "skills";
     input.down = false;
     resetJoystick();
     return;
@@ -4207,6 +4996,10 @@ canvas.addEventListener("pointerdown", (ev) => {
     handlePointer(ev);
     return;
   }
+  if (state.screen === "town") {
+    handlePointer(ev);
+    return;
+  }
   const leftStickZone = p.x < 170 && p.y > H - 285;
   if (leftStickZone) {
     input.joyActive = true;
@@ -4235,6 +5028,11 @@ window.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" || ev.key === " ") advanceIntro();
     return;
   }
+  if (state.screen === "town") {
+    if (ev.key === "Enter" || ev.key === " ") enterDungeon();
+    if (ev.key.toLowerCase() === "escape") state.townPanel = null;
+    return;
+  }
   ensureAudio();
   if (ev.key === "1") castSkill(0);
   if (ev.key === "2") castSkill(1);
@@ -4245,6 +5043,7 @@ window.addEventListener("keydown", (ev) => {
   if (ev.key === "7") castSkill(6);
   if (ev.key === "8") castSkill(7);
   if (ev.key.toLowerCase() === "r") toggleMount();
+  if (ev.key.toLowerCase() === "t") enterTown("마을로 귀환했다");
   if (ev.key.toLowerCase() === "q") castUltimate();
   input.keys.add(ev.key.toLowerCase());
 });
