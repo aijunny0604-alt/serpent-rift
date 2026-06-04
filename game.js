@@ -1,5 +1,19 @@
 const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const visibleCtx = canvas.getContext("2d");
+const renderCanvas = document.createElement("canvas");
+const ctx = renderCanvas.getContext("2d");
+let canvasSaveDepth = 0;
+const nativeCtxSave = ctx.save.bind(ctx);
+const nativeCtxRestore = ctx.restore.bind(ctx);
+ctx.save = () => {
+  canvasSaveDepth += 1;
+  nativeCtxSave();
+};
+ctx.restore = () => {
+  if (canvasSaveDepth <= 0) return;
+  canvasSaveDepth -= 1;
+  nativeCtxRestore();
+};
 
 const W = canvas.width;
 const H = canvas.height;
@@ -8,7 +22,18 @@ const KILLS_PER_STAGE = 10;
 const DPR = 1;
 canvas.width = W * DPR;
 canvas.height = H * DPR;
+renderCanvas.width = canvas.width;
+renderCanvas.height = canvas.height;
 ctx.scale(DPR, DPR);
+
+function presentFrame() {
+  visibleCtx.setTransform(1, 0, 0, 1, 0, 0);
+  visibleCtx.globalAlpha = 1;
+  visibleCtx.globalCompositeOperation = "source-over";
+  visibleCtx.filter = "none";
+  visibleCtx.clearRect(0, 0, canvas.width, canvas.height);
+  visibleCtx.drawImage(renderCanvas, 0, 0);
+}
 
 const bg = new Image();
 bg.src = "./assets/serpent-arena.png";
@@ -40,6 +65,8 @@ const sprites = {
   elementFx: markLogicalSize(loadImage("./assets/element-fx-4k-v1.png"), 512, 256),
   combatFx: loadImage("./assets/combat-fx-atlas.png"),
   magicFx: markLogicalSize(loadImage("./assets/magic-fx-atlas-generated-game-v1.png"), 2048, 256),
+  enemyAttackFx: loadImage("./assets/enemy-attack-fx-sheet-v1.png"),
+  bossCastFx: loadImage("./assets/boss-cast-fx-sheet-v1.png"),
   uiFantasy: loadImage("./assets/ui-fantasy-atlas-v2.png"),
   townMap: loadImage("./assets/town-map-4k-v1.png"),
   townBuildings: loadImage("./assets/town-buildings-atlas-4k-v1.png"),
@@ -291,6 +318,7 @@ const player = {
   slashCd: 0,
   invuln: 0,
   facing: -Math.PI / 2,
+  renderDir: 1,
   attackAnim: 0,
   castAnim: 0,
   castColor: "#ffd965",
@@ -871,6 +899,8 @@ function spawnEnemy(kind = "shade") {
     speed: (elite ? 58 : 78) + state.stageIndex * 4,
     hit: 0,
     attackAnim: 0,
+    castAnim: 0,
+    attackTell: rand(0.4, 1.2),
     knockX: 0,
     knockY: 0,
     walkAnim: rand(0, 10),
@@ -914,6 +944,8 @@ function spawnBoss() {
     speed: Math.max(10, 18 - floorBonus * 10),
     hit: 0,
     attackAnim: 0,
+    castAnim: 0,
+    attackTell: 1.1,
     knockX: 0,
     knockY: 0,
     walkAnim: 0,
@@ -924,7 +956,9 @@ function spawnBoss() {
 }
 
 function addParticle(x, y, color, amount = 10, power = 1) {
-  for (let i = 0; i < amount; i += 1) {
+  const budget = particles.length > 300 ? 0.28 : particles.length > 220 ? 0.5 : 1;
+  const count = Math.max(1, Math.floor(amount * budget));
+  for (let i = 0; i < count; i += 1) {
     const a = rand(0, Math.PI * 2);
     const s = rand(40, 180) * power;
     particles.push({
@@ -941,7 +975,9 @@ function addParticle(x, y, color, amount = 10, power = 1) {
 }
 
 function addPrismaticBurst(x, y, palette, amount = 28, power = 1) {
-  for (let i = 0; i < amount; i += 1) {
+  const budget = particles.length > 300 ? 0.25 : particles.length > 220 ? 0.45 : 1;
+  const count = Math.max(1, Math.floor(amount * budget));
+  for (let i = 0; i < count; i += 1) {
     const color = palette[i % palette.length];
     const a = rand(0, Math.PI * 2);
     const s = rand(80, 260) * power;
@@ -1000,7 +1036,7 @@ function spawnLoot(x, y, enemyKind) {
   }
 }
 
-function damageEnemy(enemy, amount, color = "#fff2a5", sourceX = player.x, sourceY = player.y) {
+function damageEnemy(enemy, amount, color = "#fff2a5", sourceX = player.x, sourceY = player.y, options = {}) {
   if (enemy.dead) return;
   const finalAmount = Math.floor(amount);
   const crit = finalAmount >= player.atk * 1.75 || Math.random() < 0.18;
@@ -1028,10 +1064,11 @@ function damageEnemy(enemy, amount, color = "#fff2a5", sourceX = player.x, sourc
   hazards.push({ type: "impact", x: enemy.x, y: enemy.y - enemy.r * 0.1, life: crit ? 0.58 : 0.38, max: crit ? 0.58 : 0.38, color, crit, heavy });
   hazards.push({ type: "powerBurst", x: enemy.x, y: enemy.y, angle: Math.atan2(enemy.y - sourceY, enemy.x - sourceX), life: heavy ? 0.34 : 0.22, max: heavy ? 0.34 : 0.22, color, crit, heavy });
   addParticle(enemy.x, enemy.y, color, crit ? 42 : 22, crit ? 1.7 : 1.12);
-  state.shake = Math.max(state.shake, crit ? 14 : heavy ? 9 : 5);
-  state.hitStop = Math.max(state.hitStop, crit ? 0.075 : heavy ? 0.045 : 0.025);
-  state.powerFlash = Math.max(state.powerFlash, crit ? 0.42 : 0.24);
-  state.shockwave = Math.max(state.shockwave, crit ? 1 : 0.55);
+  const impactScale = options.impactScale ?? 1;
+  state.shake = Math.max(state.shake, (crit ? 14 : heavy ? 9 : 5) * impactScale);
+  if (!options.noHitStop) state.hitStop = Math.max(state.hitStop, (crit ? 0.075 : heavy ? 0.045 : 0.025) * impactScale);
+  if (!options.noFlash) state.powerFlash = Math.max(state.powerFlash, (crit ? 0.42 : 0.24) * impactScale);
+  if (!options.noShockwave) state.shockwave = Math.max(state.shockwave, (crit ? 1 : 0.55) * impactScale);
   playSfx(crit ? "crit" : "hit");
   if (enemy.hp <= 0) {
     enemy.dead = true;
@@ -1337,17 +1374,33 @@ function blinkTargets(originX, originY) {
     .slice(0, 7);
 }
 
+function effectLoad() {
+  return hazards.length + projectiles.length * 1.4 + particles.length / 12 + hits.length / 8;
+}
+
+function heavySkillActive() {
+  return hazards.some((h) => h.type === "blinkDance" || h.type === "ultimate" || h.type === "thunderStorm" || h.type === "infernoField");
+}
+
+function isHeavySkill(id) {
+  return id === "blink" || id === "thunder" || id === "inferno";
+}
+
 function autoCastSkills(dt) {
   if (player.hp <= 0 || enemies.length === 0) return;
   state.autoSkillTimer -= dt;
   state.ultimateCharge = Math.min(100, state.ultimateCharge + dt * 5 + enemies.length * dt * 0.7);
+  if (heavySkillActive() || effectLoad() > 105) {
+    state.autoSkillTimer = Math.max(state.autoSkillTimer, 0.18);
+    return;
+  }
   if (state.ultimateCharge >= 100) {
     state.ultimateCharge = 0;
     castUltimate();
     return;
   }
   if (state.autoSkillTimer > 0) return;
-  state.autoSkillTimer = rand(0.34, 0.72);
+  state.autoSkillTimer = rand(0.72, 1.15);
   const ready = skills
     .map((skill, index) => ({ skill, index }))
     .filter(({ skill }) => skill.cd <= 0 && player.mp >= skill.cost);
@@ -1380,6 +1433,10 @@ function castUltimate() {
 function castSkill(index) {
   const s = skills[index];
   if (!s || s.cd > 0 || player.mp < s.cost || player.hp <= 0) return;
+  if (isHeavySkill(s.id) && (heavySkillActive() || effectLoad() > 115)) {
+    state.autoSkillTimer = Math.max(state.autoSkillTimer, 0.24);
+    return;
+  }
   playSfx(s.id === "meteor" ? "meteor" : s.id === "lance" ? "slash" : "spell");
   addQuestProgress("skills", 1);
   s.cd = s.maxCd;
@@ -1455,8 +1512,7 @@ function castSkill(index) {
         max: 1.05,
         color: "#ffffff",
       });
-      state.hitStop = Math.max(state.hitStop, 0.035);
-      state.powerFlash = Math.max(state.powerFlash, 0.28);
+      state.powerFlash = Math.max(state.powerFlash, 0.12);
       spawnSkillAura(player.x, player.y, "blink", 135, 0.75);
       state.comboText = "PHANTOM SLASH!";
       state.comboTime = 1;
@@ -1490,19 +1546,19 @@ function castSkill(index) {
 
 function update(dt) {
   state.t += dt;
+  if (particles.length > 320) particles.splice(0, particles.length - 320);
+  if (hazards.length > 44) hazards.splice(0, hazards.length - 44);
+  if (hits.length > 96) hits.splice(0, hits.length - 96);
+  if (lootDrops.length > 80) lootDrops.splice(0, lootDrops.length - 80);
+  if (projectiles.length > 36) projectiles.splice(0, projectiles.length - 36);
   if (!Number.isFinite(state.hitStop)) state.hitStop = 0;
-  if (state.hitStop > 0.25) state.hitStop = 0.25;
+  if (state.hitStop > 0.055) state.hitStop = 0.055;
   if (state.hitStop > 0) {
     state.hitStop = Math.max(0, state.hitStop - dt);
     state.powerFlash = Math.max(0, state.powerFlash - dt * 1.8);
     state.shockwave = Math.max(0, state.shockwave - dt * 2.4);
     return;
   }
-  if (particles.length > 600) particles.splice(0, particles.length - 600);
-  if (hazards.length > 80) hazards.splice(0, hazards.length - 80);
-  if (hits.length > 200) hits.splice(0, hits.length - 200);
-  if (lootDrops.length > 120) lootDrops.splice(0, lootDrops.length - 120);
-  if (projectiles.length > 80) projectiles.splice(0, projectiles.length - 80);
   state.messageTime = Math.max(0, state.messageTime - dt);
   state.stageIntro = Math.max(0, state.stageIntro - dt);
   state.raidIntro = Math.max(0, state.raidIntro - dt);
@@ -1607,12 +1663,17 @@ function update(dt) {
   for (const e of enemies) {
     e.hit = Math.max(0, e.hit - dt);
     e.attackAnim = Math.max(0, e.attackAnim - dt);
+    e.castAnim = Math.max(0, (e.castAnim || 0) - dt);
+    e.attackTell = Math.max(0, (e.attackTell || 0) - dt);
     e.pulse += dt;
     if (e.kind === "boss") {
       e.pattern -= dt;
       if (e.pattern <= 0) {
         e.pattern = rand(4.2, 6.2);
+        e.castAnim = 1.05;
+        e.attackAnim = Math.max(e.attackAnim, 0.74);
         hazards.push({ type: "danger", x: player.x + rand(-42, 42), y: player.y + rand(-42, 42), r: 18, maxR: 72, life: 1.35, armed: 0.86, color: "#ff3d4f" });
+        hazards.push({ type: "bossCast", x: e.x, y: e.y, life: 0.9, max: 0.9, color: currentStage().enemyColor, radius: Math.min(220, 92 + e.r * 0.86) });
         addParticle(e.x, e.y, "#8eff65", 10, 0.8);
       }
     }
@@ -1634,15 +1695,23 @@ function update(dt) {
     e.knockX *= Math.pow(0.035, dt);
     e.knockY *= Math.pow(0.035, dt);
     const contactRadius = e.kind === "boss" ? e.hitRadius || 48 : e.r;
+    if (e.kind !== "boss" && d < contactRadius + player.r + 42 && e.attackTell <= 0) {
+      e.attackTell = e.kind === "elite" ? rand(0.72, 1.08) : rand(0.9, 1.34);
+      e.attackAnim = Math.max(e.attackAnim, e.kind === "elite" ? 0.5 : 0.42);
+      hazards.push({ type: "enemySwipe", x: e.x, y: e.y - e.r * 0.15, angle: Math.atan2(player.y - e.y, player.x - e.x), life: 0.32, max: 0.32, color: e.kind === "elite" ? "#d66bff" : currentStage().enemyColor, boss: false });
+    }
     if (d < contactRadius + player.r + 4 && player.invuln <= 0) {
       const taken = state.partyBarrier > 0 ? Math.ceil(e.atk * 0.48) : e.atk;
       player.hp -= taken;
       player.invuln = 0.55;
       player.hurtAnim = 0.38;
-      e.attackAnim = 0.34;
-      state.shake = 5;
+      e.attackAnim = e.kind === "boss" ? 0.72 : 0.5;
+      e.castAnim = e.kind === "boss" ? Math.max(e.castAnim || 0, 0.45) : e.castAnim;
+      e.attackTell = e.kind === "boss" ? 0.85 : 0.62;
+      state.shake = e.kind === "boss" ? 9 : 5;
       hits.push({ x: player.x, y: player.y - 24, vx: rand(-12, 12), vy: -86, text: `-${taken}`, life: 0.75, max: 0.75, color: state.partyBarrier > 0 ? "#ffd965" : "#ff7184", crit: false, spin: rand(-0.12, 0.12), playerHit: true });
       hazards.push({ type: "impact", x: player.x, y: player.y - 4, life: 0.32, max: 0.32, color: "#ff7184", crit: false });
+      hazards.push({ type: "enemySwipe", x: e.x, y: e.y - e.r * 0.15, angle: Math.atan2(player.y - e.y, player.x - e.x), life: e.kind === "boss" ? 0.5 : 0.34, max: e.kind === "boss" ? 0.5 : 0.34, color: e.kind === "boss" ? currentStage().enemyColor : "#ff7184", boss: e.kind === "boss" });
       addParticle(player.x, player.y, "#ff7184", 12, 0.8);
     }
   }
@@ -1704,14 +1773,13 @@ function update(dt) {
           player.targetY = player.y;
           player.facing = angle;
           player.attackAnim = 0.46;
-          damageEnemy(target, player.atk * 2.8 + rand(15, 32), "#ffffff", h.prevX, h.prevY);
+          damageEnemy(target, player.atk * 2.8 + rand(15, 32), "#ffffff", h.prevX, h.prevY, { noHitStop: true, noFlash: true, noShockwave: true, impactScale: 0.42 });
           h.prevX = player.x;
           h.prevY = player.y;
-          state.shake = Math.max(state.shake, 10);
-          state.powerFlash = Math.max(state.powerFlash, 0.26);
+          state.shake = Math.max(state.shake, 4);
         }
         h.index += 1;
-        h.timer = 0.085;
+        h.timer = 0.115;
       }
     }
     if (h.type === "thunderStorm") {
@@ -1914,6 +1982,7 @@ function drawUiFrame(index, x, y, w, h, alpha = 1, slice = 44) {
 function drawCombatFx(index, x, y, size, rotation = 0, alpha = 1, scaleY = 1) {
   const img = sprites.magicFx;
   if (!img.complete || img.naturalWidth <= 0) return false;
+  if (effectLoad() > 130 && size > 230) return false;
   const frameW = 256;
   const frameH = 256;
   const sxScale = img.logicalWidth ? img.naturalWidth / img.logicalWidth : 1;
@@ -1928,6 +1997,20 @@ function drawCombatFx(index, x, y, size, rotation = 0, alpha = 1, scaleY = 1) {
   ctx.globalCompositeOperation = "lighter";
   ctx.globalAlpha = alpha * 0.74;
   ctx.drawImage(img, sx, sy, sw, sh, -size / 2, (-size * scaleY) / 2, size, size * scaleY);
+  ctx.restore();
+  return true;
+}
+
+function drawFxSheetFrame(img, frame, frameW, frameH, x, y, w, h, alpha = 1, rotation = 0, scaleY = 1) {
+  if (!img.complete || img.naturalWidth <= 0) return false;
+  const frameCount = Math.max(1, Math.floor(img.naturalWidth / frameW));
+  const sx = clamp(frame, 0, frameCount - 1) * frameW;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.globalAlpha *= alpha;
+  ctx.globalCompositeOperation = "lighter";
+  ctx.drawImage(img, sx, 0, frameW, frameH, -w / 2, (-h * scaleY) / 2, w, h * scaleY);
   ctx.restore();
   return true;
 }
@@ -2068,37 +2151,55 @@ function drawEntity(e) {
   ctx.save();
   const bob = Math.sin(e.pulse * (boss ? 2.1 : 6.2)) * (boss ? 4 : 3);
   const hitJerk = e.hit > 0 ? Math.sin(e.hit * 55) * 6 : 0;
-  const lunge = e.attackAnim > 0 ? Math.sin((1 - e.attackAnim / 0.34) * Math.PI) * 10 : 0;
+  const attackMax = boss ? 0.74 : e.kind === "elite" ? 0.5 : 0.42;
+  const attackPhase = e.attackAnim > 0 ? clamp(1 - e.attackAnim / attackMax, 0, 1) : 0;
+  const windup = e.attackAnim > 0 ? Math.sin(clamp(attackPhase / 0.35, 0, 1) * Math.PI) : 0;
+  const strike = e.attackAnim > 0 ? Math.sin(clamp((attackPhase - 0.22) / 0.58, 0, 1) * Math.PI) : 0;
+  const castPulse = (e.castAnim || 0) > 0 ? Math.sin(clamp(1 - e.castAnim / (boss ? 1.05 : 0.55), 0, 1) * Math.PI) : 0;
+  const lunge = strike * (boss ? 30 : e.kind === "elite" ? 19 : 14) - windup * (boss ? 10 : 6);
   const face = Math.atan2(player.y - e.y, player.x - e.x);
-  ctx.translate(e.x + Math.cos(face) * lunge + hitJerk, e.y + bob + Math.sin(face) * lunge);
+  ctx.translate(e.x + Math.cos(face) * lunge + hitJerk, e.y + bob + Math.sin(face) * lunge - castPulse * (boss ? 12 : 4));
   ctx.globalAlpha = e.hit > 0 ? 0.82 : 1;
   ctx.shadowBlur = boss ? 34 + bossScale * 12 : 16;
   ctx.shadowColor = boss ? stage.enemyColor : e.kind === "elite" ? "#d66bff" : stage.enemyColor;
   const hurtSquash = e.hit > 0 ? Math.sin(e.hit * 35) * 0.12 : 0;
-  const pulse = Math.sin(e.pulse * 5) * 0.05 + 1 + (e.attackAnim > 0 ? 0.08 : 0);
-  ctx.rotate((boss ? 0.035 : 0.08) * Math.sin(e.pulse * 4) + (e.hit > 0 ? 0.12 * Math.sin(e.hit * 80) : 0));
-  ctx.scale(pulse + hurtSquash, pulse - hurtSquash * 0.6);
+  const pulse = Math.sin(e.pulse * 5) * 0.05 + 1 + strike * (boss ? 0.16 : 0.1) + castPulse * 0.05;
+  ctx.rotate((boss ? 0.035 : 0.08) * Math.sin(e.pulse * 4) + strike * (boss ? 0.16 : 0.22) + (e.hit > 0 ? 0.12 * Math.sin(e.hit * 80) : 0));
+  ctx.scale(pulse + hurtSquash + windup * 0.05, pulse - hurtSquash * 0.6 - windup * 0.06);
   ctx.fillStyle = boss ? "rgba(2, 8, 13, .52)" : "rgba(0, 0, 0, .32)";
   ctx.beginPath();
   ctx.ellipse(0, size * 0.27, size * 0.34, size * 0.13, 0, 0, Math.PI * 2);
   ctx.fill();
-  if (e.attackAnim > 0) {
-    const phase = 1 - e.attackAnim / 0.34;
+  if ((e.castAnim || 0) > 0) {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = Math.sin(phase * Math.PI) * 0.8;
-    ctx.rotate(-0.2);
+    ctx.globalAlpha = 0.22 + castPulse * 0.5;
+    ctx.strokeStyle = boss ? stage.enemyColor : "#ff7184";
+    ctx.shadowBlur = boss ? 42 : 20;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.lineWidth = boss ? 6 : 3;
+    ctx.rotate(-e.pulse * 1.2);
+    ctx.beginPath();
+    ctx.ellipse(0, boss ? -size * 0.08 : -size * 0.12, size * (boss ? 0.68 : 0.48), size * (boss ? 0.24 : 0.18), 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (e.attackAnim > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = (0.22 + strike * 0.78) * (boss ? 1 : 0.88);
+    ctx.rotate(-0.34 + strike * 0.28);
     ctx.strokeStyle = boss ? stage.enemyColor : "#ff7184";
     ctx.shadowBlur = 18;
     ctx.shadowColor = ctx.strokeStyle;
     ctx.lineWidth = boss ? 8 * bossScale : 5;
     ctx.beginPath();
-    ctx.arc(18, -4, boss ? 76 * bossScale : 34, -0.75, 0.55);
+    ctx.arc(18 + strike * (boss ? 26 : 12), -4, boss ? 76 * bossScale : 34, -0.95 + windup * 0.16, 0.55 + strike * 0.38);
     ctx.stroke();
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = boss ? 3 : 2;
     ctx.beginPath();
-    ctx.arc(18, -4, boss ? 76 * bossScale : 34, -0.55, 0.38);
+    ctx.arc(18 + strike * (boss ? 26 : 12), -4, boss ? 76 * bossScale : 34, -0.58, 0.42 + strike * 0.28);
     ctx.stroke();
     ctx.restore();
   }
@@ -2153,7 +2254,7 @@ function drawEntity(e) {
       action === "hurt"
         ? Math.min(5, Math.floor((1 - e.hit / 0.42) * 6))
         : action === "attack"
-          ? Math.min(5, Math.floor((1 - e.attackAnim / 0.34) * 6))
+          ? Math.min(5, Math.floor(attackPhase * 6))
           : action === "walk"
             ? Math.floor(e.walkAnim) % 6
             : Math.floor(e.pulse * (boss ? 2.4 : 3)) % 6;
@@ -2208,10 +2309,20 @@ function playerActionFrame() {
   return { action: "idle", frame: Math.floor(state.t * 5) % 6 };
 }
 
-function drawPlayerSheetFrame(size, tint = null) {
+function renderDirFromAngle(angle, fallback = 1) {
+  const x = Math.cos(angle);
+  if (Math.abs(x) < 0.18) return fallback;
+  return x < 0 ? -1 : 1;
+}
+
+function drawPlayerSheetFrame(size, tint = null, direction = 1) {
   const sheet = player.mounted ? sprites.playerRidingSheet : sprites.playerSheet;
+  const dir = direction < 0 ? -1 : 1;
+  ctx.save();
+  ctx.scale(dir, 1);
   if (!sheet.complete || sheet.naturalWidth <= 0) {
     drawSpriteCutout(sprites.player, size * 0.82, tint);
+    ctx.restore();
     return;
   }
   const anim = playerActionFrame();
@@ -2224,6 +2335,7 @@ function drawPlayerSheetFrame(size, tint = null) {
   } else {
     ctx.drawImage(sheet, sx, sy, sw, sh, -size / 2, -size * 0.76, size, size);
   }
+  ctx.restore();
 }
 
 function drawSwordSwing(phase) {
@@ -2630,6 +2742,8 @@ function drawCompanion(unit) {
 function drawPlayer() {
   const size = player.mounted ? 148 : 104;
   ctx.save();
+  player.renderDir = renderDirFromAngle(player.facing, player.renderDir || 1);
+  const renderDir = player.renderDir || 1;
   const moving = player.isMoving;
   const walkPower = player.movePower || 0;
   const walkFrame = Math.sin(player.stepAnim);
@@ -2679,7 +2793,7 @@ function drawPlayer() {
     ctx.globalAlpha = 0.16 + walkPower * 0.16;
     ctx.translate(-Math.cos(player.facing) * 14, -Math.sin(player.facing) * 7);
     ctx.rotate(walkFrame * 0.08);
-    drawPlayerSheetFrame(size, "rgba(87, 223, 255, .45)");
+    drawPlayerSheetFrame(size, "rgba(87, 223, 255, .45)", renderDir);
     ctx.restore();
 
   }
@@ -2688,7 +2802,7 @@ function drawPlayer() {
     ctx.globalAlpha = 0.3 * Math.sin(attackPhase * Math.PI);
     ctx.translate(-Math.cos(player.facing) * 20, -Math.sin(player.facing) * 20);
     ctx.rotate(-0.28);
-    drawPlayerSheetFrame(size, "rgba(97, 223, 255, .35)");
+    drawPlayerSheetFrame(size, "rgba(97, 223, 255, .35)", renderDir);
     ctx.restore();
   }
   if (player.hurtAnim > 0) {
@@ -2713,7 +2827,7 @@ function drawPlayer() {
   ctx.rotate(gaitLean + attackLean);
   ctx.scale((1 + strideStretch * 0.055) * castScale + hurtSquash, (1 - strideStretch * 0.065) * castScale - hurtSquash * 0.35);
   const tint = player.hurtAnim > 0 ? "rgba(255, 70, 85, .45)" : player.castAnim > 0 ? "rgba(255, 236, 143, .22)" : null;
-  drawPlayerSheetFrame(size, tint);
+  drawPlayerSheetFrame(size, tint, renderDir);
   if (player.attackAnim > 0) drawSwordSwing(attackPhase);
   ctx.restore();
 }
@@ -3022,6 +3136,55 @@ function drawHazard(h) {
     ctx.arc(h.x, h.y, h.maxR, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+  }
+  if (h.type === "bossCast") {
+    const p = 1 - h.life / h.max;
+    const a = clamp(h.life / h.max, 0, 1);
+    const frame = Math.min(5, Math.floor(p * 6));
+    if (!drawFxSheetFrame(sprites.bossCastFx, frame, 384, 384, h.x, h.y - 24, h.radius * 2.42, h.radius * 2.42, a * 0.96, 0, 0.72)) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = a * 0.72;
+      ctx.strokeStyle = h.color;
+      ctx.shadowBlur = 34;
+      ctx.shadowColor = h.color;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.ellipse(h.x, h.y + 12, h.radius * (0.42 + p * 0.58), h.radius * (0.16 + p * 0.24), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 6; i += 1) {
+        const angle = state.t * 2 + i * Math.PI / 3;
+        ctx.beginPath();
+        ctx.moveTo(h.x + Math.cos(angle) * h.radius * 0.22, h.y - 60 + Math.sin(angle) * 16);
+        ctx.lineTo(h.x + Math.cos(angle) * h.radius * 0.62, h.y - 110 + Math.sin(angle) * 28);
+        ctx.stroke();
+      }
+    }
+  }
+  if (h.type === "enemySwipe") {
+    const p = 1 - h.life / h.max;
+    const a = clamp(h.life / h.max, 0, 1);
+    const frame = Math.min(5, Math.floor(p * 6));
+    const size = h.boss ? 250 : 128;
+    if (!drawFxSheetFrame(sprites.enemyAttackFx, frame, 256, 256, h.x + Math.cos(h.angle) * (h.boss ? 56 : 24), h.y + Math.sin(h.angle) * (h.boss ? 56 : 24), size, size, a * (h.boss ? 1 : 0.92), h.angle, h.boss ? 1.04 : 0.86)) {
+      ctx.translate(h.x, h.y);
+      ctx.rotate(h.angle);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = a;
+      ctx.shadowBlur = h.boss ? 34 : 18;
+      ctx.shadowColor = h.color;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = h.color;
+      ctx.lineWidth = h.boss ? 15 : 7;
+      ctx.beginPath();
+      ctx.arc(14 + p * (h.boss ? 34 : 18), 0, h.boss ? 96 : 42, -0.62, 0.72 + p * 0.25);
+      ctx.stroke();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = h.boss ? 5 : 2.5;
+      ctx.beginPath();
+      ctx.arc(18 + p * (h.boss ? 34 : 18), 0, h.boss ? 98 : 43, -0.36, 0.46 + p * 0.22);
+      ctx.stroke();
+    }
   }
   if (h.type === "slash") {
     const p = 1 - h.life / 0.24;
@@ -3448,7 +3611,7 @@ function drawProjectile(p) {
     ctx.shadowBlur = 24;
     ctx.shadowColor = p.color;
     ctx.scale(1.04, 1.04);
-    drawPlayerSheetFrame(104, "rgba(141,255,251,.55)");
+    drawPlayerSheetFrame(104, "rgba(141,255,251,.55)", renderDirFromAngle(p.facing, player.renderDir || 1));
   }
   ctx.restore();
 }
@@ -4721,6 +4884,32 @@ function resetCanvasState() {
   ctx.textBaseline = "alphabetic";
 }
 
+function restoreCanvasDepth(targetDepth) {
+  while (canvasSaveDepth > targetDepth) ctx.restore();
+  resetCanvasState();
+}
+
+let lastRenderFaultLog = 0;
+
+function reportRenderFault(label, err) {
+  const now = performance.now();
+  if (now - lastRenderFaultLog < 900) return;
+  lastRenderFaultLog = now;
+  console.warn(`[${label}] unstable render isolated`, err);
+}
+
+function drawSafe(list, index, drawer, label) {
+  const item = list[index];
+  const depth = canvasSaveDepth;
+  try {
+    drawer(item);
+  } catch (err) {
+    list.splice(index, 1);
+    restoreCanvasDepth(depth);
+    reportRenderFault(label, err);
+  }
+}
+
 function draw() {
   resetCanvasState();
   if (state.screen === "title") {
@@ -4744,29 +4933,39 @@ function draw() {
     ctx.translate(sx, sy);
   }
   drawBackground();
-  for (const h of hazards) drawHazard(h);
-  for (const p of projectiles) drawProjectile(p);
-  lootDrops.sort((a, b) => a.y - b.y).forEach(drawLootDrop);
+  for (let i = hazards.length - 1; i >= 0; i -= 1) drawSafe(hazards, i, drawHazard, "hazard");
+  for (let i = projectiles.length - 1; i >= 0; i -= 1) drawSafe(projectiles, i, drawProjectile, "projectile");
+  lootDrops.sort((a, b) => a.y - b.y);
+  for (let i = lootDrops.length - 1; i >= 0; i -= 1) drawSafe(lootDrops, i, drawLootDrop, "loot");
   for (const p of pickups) {
     ctx.fillStyle = `rgba(255, 220, 96, ${clamp(p.life, 0, 1)})`;
     ctx.beginPath();
     ctx.arc(p.x, p.y, 5 + Math.sin(state.t * 8) * 2, 0, Math.PI * 2);
     ctx.fill();
   }
-  enemies.sort((a, b) => a.y - b.y).forEach(drawEntity);
-  [...partyMembers, ...(player.mounted ? [] : [pet])].sort((a, b) => a.y - b.y).forEach(drawCompanion);
+  enemies.sort((a, b) => a.y - b.y);
+  for (let i = enemies.length - 1; i >= 0; i -= 1) drawSafe(enemies, i, drawEntity, "enemy");
+  const companionsToDraw = [...partyMembers, ...(player.mounted ? [] : [pet])].sort((a, b) => a.y - b.y);
+  for (let i = companionsToDraw.length - 1; i >= 0; i -= 1) {
+    const depth = canvasSaveDepth;
+    try {
+      drawCompanion(companionsToDraw[i]);
+    } catch (err) {
+      restoreCanvasDepth(depth);
+      reportRenderFault("companion", err);
+    }
+  }
   drawPlayer();
   for (const p of particles) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.size)) continue;
     ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
     ctx.fillStyle = p.color;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, Math.max(0.5, p.size), 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
-  for (const h of hits) {
-    drawDamageNumber(h);
-  }
+  for (let i = hits.length - 1; i >= 0; i -= 1) drawSafe(hits, i, drawDamageNumber, "damage");
   ctx.restore();
 
   if (state.lootFlash > 0) {
@@ -4832,8 +5031,10 @@ function loop(now) {
     }
     else if (!state.paused) update(dt);
     draw();
+    presentFrame();
   } catch (err) {
-    console.error("[game loop] frame skipped:", err);
+    reportRenderFault("game loop", err);
+    restoreCanvasDepth(0);
   }
   requestAnimationFrame(loop);
 }
